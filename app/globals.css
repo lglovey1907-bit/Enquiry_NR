@@ -1,0 +1,119 @@
+/* NR Enquiry Desk — office console in Indian Railways maroon, matching the counter board */
+:root {
+  --bg: #f4f2ef;
+  --panel: #ffffff;
+  --ink: #1d1f23;
+  --muted: #646a73;
+  --rule: #dedad4;
+  --maroon: #7b1e2c;
+  --maroon-deep: #5a1420;
+  --maroon-tint: #f6e9eb;
+  --go: #1f8a4c;
+  --go-tint: #e5f4ea;
+  --caution: #b26a00;
+  --caution-tint: #fdf1de;
+  --stop: #c0322f;
+  --stop-tint: #fbe7e6;
+  --f-head: "Rajdhani", "Arial Narrow", sans-serif;
+  --f-body: "IBM Plex Sans", system-ui, sans-serif;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #16181b; --panel: #1f2226; --ink: #eceae6; --muted: #9aa1aa; --rule: #343a42;
+    --maroon: #c4505f; --maroon-deep: #5a1420; --maroon-tint: #3a1a20;
+    --go: #3ccf7a; --go-tint: #173324; --caution: #f0a43a; --caution-tint: #3a2b14;
+    --stop: #ff6b67; --stop-tint: #3d1d1c;
+    color-scheme: dark;
+  }
+}
+
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body { background: var(--bg); color: var(--ink); font-family: var(--f-body); font-size: 15px; line-height: 1.5; }
+a { color: var(--maroon); }
+
+/* Top band */
+.band { background: linear-gradient(180deg, #7b1e2c, #5a1420); color: #f1ede6;
+  padding-block: 14px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+.band-in { max-width: 1100px; margin: 0 auto; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; }
+.brand { display: grid; line-height: 1.1; }
+.brand small { font-family: var(--f-head); letter-spacing: .2em; text-transform: uppercase; font-size: .75rem; color: #e9c9cd; }
+.brand b { font-family: var(--f-head); font-size: 1.6rem; letter-spacing: .02em; }
+.nav { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.nav a, .nav button { color: #f1ede6; text-decoration: none; font: 600 .9rem var(--f-body); background: transparent;
+  border: 1px solid rgba(241,237,230,.35); border-radius: 6px; padding: 6px 12px; cursor: pointer; }
+.nav a.active, .nav a:hover, .nav button:hover { background: rgba(241,237,230,.14); }
+.who { font-size: .85rem; color: #e9c9cd; }
+
+main.wrap { max-width: 1100px; margin: 0 auto; padding-block: 24px 48px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+  display: grid; gap: 20px; }
+
+h1, h2 { font-family: var(--f-head); font-weight: 700; letter-spacing: .02em; margin: 0; line-height: 1.15; text-wrap: balance; }
+h1 { font-size: 1.9rem; }
+h2 { font-size: 1.35rem; }
+.lede { color: var(--muted); margin: 4px 0 0; max-width: 62ch; }
+
+.panel { background: var(--panel); border: 1px solid var(--rule); border-radius: 10px; padding: 20px; display: grid; gap: 16px; min-width: 0; }
+
+/* Auth card */
+.auth { min-height: 100%; display: grid; place-items: center; padding-block: 40px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+.auth .panel { width: min(440px, 100%); padding: 28px; border-top: 5px solid var(--maroon); }
+.steps { display: flex; gap: 6px; }
+.steps span { flex: 1; height: 4px; border-radius: 2px; background: var(--rule); }
+.steps span.on { background: var(--maroon); }
+
+/* Forms */
+form { display: grid; gap: 14px; }
+label { display: grid; gap: 6px; font-weight: 600; font-size: .88rem; }
+label .hint { font-weight: 400; color: var(--muted); font-size: .8rem; }
+input, select { font: inherit; color: var(--ink); background: var(--bg); border: 1px solid var(--rule); border-radius: 6px; padding: 10px 12px; width: 100%; }
+input:focus-visible, select:focus-visible, button:focus-visible, a:focus-visible { outline: 2px solid var(--maroon); outline-offset: 2px; }
+input.code { font-family: var(--f-head); font-size: 1.6rem; letter-spacing: .5em; text-align: center; font-variant-numeric: tabular-nums; }
+.row { display: flex; flex-wrap: wrap; gap: 12px; align-items: end; }
+.row > label { flex: 1 1 180px; }
+
+.btn { font: 600 .95rem var(--f-body); border-radius: 6px; padding: 10px 16px; cursor: pointer; border: 1px solid var(--maroon);
+  background: var(--maroon); color: #fff; }
+.btn:hover { background: var(--maroon-deep); }
+.btn:disabled { opacity: .55; cursor: not-allowed; }
+.btn.ghost { background: transparent; color: var(--maroon); }
+.btn.ghost:hover { background: var(--maroon-tint); }
+.btn.sm { padding: 5px 10px; font-size: .82rem; }
+.btn.ok { background: var(--go); border-color: var(--go); }
+.btn.no { background: transparent; border-color: var(--stop); color: var(--stop); }
+.linkbtn { background: none; border: 0; padding: 0; color: var(--maroon); font: inherit; cursor: pointer; text-decoration: underline; }
+
+.msg { border-radius: 6px; padding: 10px 12px; font-size: .9rem; }
+.msg.err { background: var(--stop-tint); color: var(--stop); }
+.msg.info { background: var(--maroon-tint); color: var(--ink); }
+.msg.ok { background: var(--go-tint); color: var(--go); }
+
+/* Tables */
+.tablewrap { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; font-size: .9rem; }
+th { text-align: left; font-family: var(--f-head); font-size: .85rem; letter-spacing: .08em; text-transform: uppercase; color: var(--muted);
+  padding: 8px 10px; border-bottom: 2px solid var(--rule); white-space: nowrap; }
+td { padding: 10px; border-bottom: 1px solid var(--rule); vertical-align: middle; }
+td.num, .num { font-variant-numeric: tabular-nums; }
+.tno { font-family: var(--f-head); font-weight: 700; font-size: 1.15rem; letter-spacing: .04em; }
+.actions { display: flex; gap: 6px; flex-wrap: wrap; }
+
+.pill { display: inline-block; font-size: .75rem; font-weight: 600; letter-spacing: .04em; text-transform: uppercase;
+  padding: 2px 8px; border-radius: 999px; white-space: nowrap; }
+.pill.queued, .pill.pending { background: var(--caution-tint); color: var(--caution); }
+.pill.active, .pill.approved { background: var(--go-tint); color: var(--go); }
+.pill.departed, .pill.removed { background: var(--rule); color: var(--muted); }
+.pill.error, .pill.rejected, .pill.disabled { background: var(--stop-tint); color: var(--stop); }
+
+.empty { color: var(--muted); padding: 18px; text-align: center; border: 1px dashed var(--rule); border-radius: 8px; }
+.tabs { display: flex; gap: 6px; flex-wrap: wrap; }
+.tabs button { font: 600 .88rem var(--f-body); border: 1px solid var(--rule); background: var(--panel); color: var(--ink);
+  border-radius: 999px; padding: 6px 14px; cursor: pointer; }
+.tabs button[aria-pressed="true"] { background: var(--maroon); border-color: var(--maroon); color: #fff; }
+.count { font-variant-numeric: tabular-nums; opacity: .8; }
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+@media (prefers-reduced-motion: no-preference) { .btn, .nav a, .tabs button { transition: background .15s; } }
