@@ -23,7 +23,13 @@ const NOTICES = [
 
 const hhmm = (d: Date) => new Intl.DateTimeFormat("en-IN", { hour: "2-digit", minute: "2-digit", hour12: false, timeZone: IST }).format(d);
 const leftText = (ms: number) => { const m = Math.max(0, Math.round(ms / 60000)), h = Math.floor(m / 60); return h ? `${h}h ${m % 60}m` : `${m}m`; };
-const hasSeats = (t: { stops: Stop[] }) => (t.stops ?? []).some(s => Object.values(s.seats ?? {}).some(n => Number(n) > 0));
+const WINDOW_MS = 4 * 3600_000;   // board shows trains departing within the next 4 hours
+/** Keep only destinations with at least one class that has current-booking seats, and only those classes. */
+const availableOnly = (stops: Stop[]): Stop[] =>
+  (stops ?? []).flatMap(s => {
+    const seats = Object.fromEntries(Object.entries(s.seats ?? {}).filter(([, n]) => Number(n) > 0));
+    return Object.keys(seats).length ? [{ ...s, seats }] : [];
+  });
 const sig = (n: number) => (n === 0 ? "b-stopc" : n <= 10 ? "b-caution" : "b-go");
 
 function useReducedMotion() {
@@ -158,9 +164,15 @@ export default function Board() {
 
   // Trains at or past departure slide off, then drop from the list.
   const keyOf = (t: Train) => `${t.train_no}-${t.journey_date}`;
-  // Only trains whose chart is prepared and that have at least one current-booking seat, until departure.
-  const live = useMemo(() => trains.filter(t =>
-    (!now || new Date(t.dep_at) > now) && t.chart_ready !== false && hasSeats(t)), [trains, now]);
+  // Trains departing in the next 4 hours whose chart is prepared, showing only the
+  // destinations and classes that have current-booking seats.
+  const live = useMemo(() => {
+    const t0 = (now ?? new Date()).getTime();
+    return trains
+      .filter(t => { const d = new Date(t.dep_at).getTime(); return d > t0 && d <= t0 + WINDOW_MS && t.chart_ready !== false; })
+      .map(t => ({ ...t, stops: availableOnly(t.stops) }))
+      .filter(t => t.stops.length > 0);
+  }, [trains, now]);
   const [shown, setShown] = useState<Train[]>([]);
   useEffect(() => {
     const liveKeys = new Set(live.map(keyOf));
@@ -243,7 +255,7 @@ export default function Board() {
       <main className="b-main b-gut">
         <div className="b-main-in">
           <div className="b-info">
-            <span>Trains with seats <b>{loaded ? shown.length : "–"}</b></span>
+            <span>Departing in next 4 hours with seats <b>{loaded ? shown.length : "–"}</b></span>
             <span>Refresh <b>Set for each train</b></span>
             <span>Quota <b>General · Current Booking</b></span>
           </div>
@@ -251,7 +263,7 @@ export default function Board() {
           <div className="b-list" ref={listRef} aria-label="Current booking seats from New Delhi by train, destination and class">
             {!loaded ? <div className="b-empty">Loading trains…</div>
               : failed && shown.length === 0 ? <div className="b-empty"><b>Board data unavailable</b>Check the internet connection. The board retries every minute.</div>
-              : shown.length === 0 ? <div className="b-empty"><b>No current-booking seats right now</b>Trains appear here once their reservation chart is prepared and current-booking seats are available. Each train leaves the board at its departure time.</div>
+              : shown.length === 0 ? <div className="b-empty"><b>No current-booking seats in the next 4 hours</b>Trains departing New Delhi in the next 4 hours appear here once their reservation chart is prepared and current-booking seats are available. Each train leaves the board at its departure time.</div>
               : shown.map((t, i) => (
                 <article key={keyOf(t)} data-row={keyOf(t)} className={`b-row${leaving.has(keyOf(t)) ? " out" : ""}`} style={{ animationDelay: `${i * 0.12}s` }}>
                   <div className="b-train">
@@ -273,7 +285,7 @@ export default function Board() {
           <div className="b-legend">
             <span className="b-sig b-go"><i style={{ background: "var(--sig-go)" }} />Seats available (more than 10)</span>
             <span className="b-sig b-caution"><i style={{ background: "var(--sig-caution)" }} />Few seats left (1–10)</span>
-            <span className="b-sig b-stopc"><i style={{ background: "var(--sig-stop)" }} />Nil</span>
+            <span className="b-sig"><i style={{ background: "var(--dim)", boxShadow: "none" }} />Only destinations and classes with seats are shown</span>
           </div>
         </div>
       </main>

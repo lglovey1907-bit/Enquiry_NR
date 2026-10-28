@@ -75,7 +75,12 @@ export default function TrainsPanel({ userId, isAdmin }: { userId: string; isAdm
     e.preventDefault();
     setError(""); setOk("");
     if (!/^\d{5}$/.test(trainNo)) { setError("Choose a train from the list, or type its 5-digit number."); return; }
-    if (/^[56]/.test(trainNo)) { setError(`${trainNo} is an unreserved passenger/MEMU train. Only reserved trains have current booking.`); return; }
+    if (!refList.some(r => r.train_no === trainNo)) {
+      setError(/^[56]/.test(trainNo)
+        ? `${trainNo} is an unreserved passenger/MEMU train. Only reserved trains have current booking.`
+        : `${trainNo} is not in the reserved trains list for New Delhi. Pick a train from the list.`);
+      return;
+    }
     setBusy(true);
     const { error } = await createClient().from("trains").insert({ train_no: trainNo, journey_date: date, refresh_minutes: every });
     setBusy(false);
@@ -147,8 +152,8 @@ export default function TrainsPanel({ userId, isAdmin }: { userId: string; isAdm
               </div>
             ) : /^[56]/.test(trainNo) ? (
               <div className="msg err">{trainNo} is unreserved (passenger/MEMU). Only reserved trains can be added.</div>
-            ) : (
-              <div className="msg info">{trainNo} is not in the NDLS reserved list. Check the number; it can still be added if it is a special train.</div>
+            ) : refList.length > 0 && (
+              <div className="msg err">{trainNo} is not in the reserved trains list for New Delhi. Pick a train from the list.</div>
             )
           )}
           {error && <div className="msg err" role="alert">{error}</div>}
@@ -189,6 +194,8 @@ export default function TrainsPanel({ userId, isAdmin }: { userId: string; isAdm
                           {!t.checked_at ? "Hidden on board until first check"
                             : t.chart_ready === false ? "Hidden on board: chart not prepared"
                             : !hasSeats(t) ? "Hidden on board: no current-booking seats"
+                            : t.dep_at && new Date(t.dep_at).getTime() - Date.now() > 4 * 3600_000
+                              ? `Shows on board from ${hhmm(new Date(new Date(t.dep_at).getTime() - 4 * 3600_000).toISOString())} (4 h before departure)`
                             : "Showing on board"}
                         </div>
                       )}
