@@ -11,13 +11,13 @@ export default async function DashboardPage() {
       <Header profile={profile} active="dashboard" />
       <main className="wrap">
         <div>
-          <h1>Trains on the board</h1>
+          <h1>Trains departing in the next 4 hours</h1>
           <p className="lede">
-            Add a train departing New Delhi and choose how often its seats are checked. The first check runs within
-            15 minutes on its journey date, then at your chosen interval until departure, when it leaves the board.
+            Live status of the seat checks behind the public board. Use Check now for a train passengers are asking
+            about, or Hide to take a train off the board.
           </p>
         </div>
-        <TrainsPanel userId={profile.id} isAdmin={profile.role === "admin"} />
+        <TrainsPanel />
       </main>
     </>
   );

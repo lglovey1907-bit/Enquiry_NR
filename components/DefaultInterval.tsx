@@ -24,22 +24,22 @@ export default function DefaultInterval() {
     setBusy(false);
     if (error) { setMsg({ kind: "err", text: error.message }); return; }
     setSaved(value);
-    setMsg({ kind: "ok", text: `New trains will be checked every ${intervalLabel(value)} unless staff choose otherwise.` });
+    setMsg({ kind: "ok", text: `Trains will be rechecked at most every ${intervalLabel(value)}. Applies to trains added from now on.` });
   }
 
   return (
     <section className="panel" aria-labelledby="def-h">
       <div>
-        <h2 id="def-h">Default check interval</h2>
-        <p className="lede">The interval a new train starts with. Staff can change it for each train on the Trains page.</p>
+        <h2 id="def-h">Recheck interval</h2>
+        <p className="lede">After a train is checked, it waits at least this long before being checked again. A shorter time means fresher figures for some trains but slower first checks for others when the board is busy.</p>
       </div>
       <form onSubmit={save} className="setting">
-        <label htmlFor="def">Check seats every
+        <label htmlFor="def">Recheck at most every
           <select id="def" value={value ?? ""} disabled={value == null} onChange={e => setValue(Number(e.target.value))}>
             {INTERVALS.map(m => <option key={m} value={m}>{intervalLabel(m)}</option>)}
           </select>
         </label>
-        <button className="btn" type="submit" disabled={busy || value == null || value === saved}>{busy ? "Saving…" : "Save default"}</button>
+        <button className="btn" type="submit" disabled={busy || value == null || value === saved}>{busy ? "Saving…" : "Save"}</button>
       </form>
       {msg && <div className={`msg ${msg.kind}`} role={msg.kind === "err" ? "alert" : "status"}>{msg.text}</div>}
     </section>
