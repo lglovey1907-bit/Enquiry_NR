@@ -56,7 +56,7 @@ Register at `/register` with loveyy.cmi@gmail.com — your account is approved a
 Open the site's main address on the counter TV and press F11 for full screen. It shows every train that has been checked and not yet departed, refreshes every minute, scrolls long routes sideways, and drops each train at its departure time. Anyone can view it without signing in; it shows only train numbers, stops and seat counts.
 
 ## How seat checks run
-Four scheduled tasks on the Commercial Branch computer (Enquiry board worker :05, :20, :35, :50) run every 15 minutes. Each run marks departed trains, checks any train that is new or due (every 30 minutes from when it was added, only on its journey date), saves the result in Supabase and updates the counter board. The computer must be on and awake with the Claude desktop app open.
+Four scheduled tasks on the Commercial Branch computer (Enquiry board worker :05, :20, :35, :50) run every 15 minutes. Each run marks departed trains, checks any train that is new or due, saves the result in Supabase and updates the counter board. Staff choose how often each train is checked (15, 30, 45 minutes, 1, 1.5 or 2 hours) when adding it, can change it later, and can ask for a check now; the admin sets the default on the Staff approvals page. Checks happen only on the journey date, and a long route that doesn't finish in one run is completed in the next. The computer must be on and awake with the Claude desktop app open.
 
 ## Security
 - Row level security on every table. Pending, rejected and disabled accounts see no trains.

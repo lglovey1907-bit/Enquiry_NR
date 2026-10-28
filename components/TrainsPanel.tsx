@@ -2,13 +2,15 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
+import { INTERVALS, intervalLabel } from "@/lib/intervals";
 
 type Stop = { code: string; name: string; seats: Record<string, number> | null };
 type Train = {
   id: number; train_no: string; journey_date: string; train_name: string | null; dep_at: string | null;
   added_at: string; added_by: string | null; status: "queued" | "active" | "departed" | "removed" | "error";
-  checked_at: string | null; next_check_at: string; stops: Stop[]; last_error: string | null;
+  checked_at: string | null; next_check_at: string; stops: Stop[]; last_error: string | null; refresh_minutes: number;
 };
+const LIVE = ["queued", "active", "error"];
 
 const IST = "Asia/Kolkata";
 const todayIST = () => new Intl.DateTimeFormat("en-CA", { timeZone: IST }).format(new Date());
@@ -28,6 +30,14 @@ export default function TrainsPanel({ userId, isAdmin }: { userId: string; isAdm
   const [error, setError] = useState("");
   const [ok, setOk] = useState("");
   const [showDone, setShowDone] = useState(false);
+  const [every, setEvery] = useState<number>(30);
+  const [rowBusy, setRowBusy] = useState<number | null>(null);
+
+  // New trains start with the admin's default interval.
+  useEffect(() => {
+    createClient().from("settings").select("default_refresh_minutes").eq("id", 1).maybeSingle()
+      .then(({ data }) => { if (data?.default_refresh_minutes) setEvery(data.default_refresh_minutes); });
+  }, []);
 
   const load = useCallback(async () => {
     const supabase = createClient();
@@ -50,7 +60,7 @@ export default function TrainsPanel({ userId, isAdmin }: { userId: string; isAdm
     setError(""); setOk("");
     if (!/^\d{5}$/.test(trainNo)) { setError("Train number must be 5 digits."); return; }
     setBusy(true);
-    const { error } = await createClient().from("trains").insert({ train_no: trainNo, journey_date: date });
+    const { error } = await createClient().from("trains").insert({ train_no: trainNo, journey_date: date, refresh_minutes: every });
     setBusy(false);
     if (error) {
       setError(error.code === "23505"
@@ -58,21 +68,30 @@ export default function TrainsPanel({ userId, isAdmin }: { userId: string; isAdm
         : error.message.includes("past") ? "Journey date cannot be in the past." : error.message);
       return;
     }
-    setOk(`Train ${trainNo} added. Its first seat check runs within 15 minutes.`);
+    const today = date === todayIST();
+    setOk(today
+      ? `Train ${trainNo} added. First seat check within 15 minutes, then every ${intervalLabel(every)}.`
+      : `Train ${trainNo} added for ${dmy(date)}. Checks start on its journey date, every ${intervalLabel(every)}.`);
     setTrainNo("");
     load();
   }
 
-  async function remove(t: Train) {
-    setError(""); setOk("");
-    const { error } = await createClient().from("trains").update({ status: "removed" }).eq("id", t.id);
+  async function update(t: Train, patch: Partial<Train>, done: string) {
+    setError(""); setOk(""); setRowBusy(t.id);
+    const { error } = await createClient().from("trains").update(patch).eq("id", t.id);
+    setRowBusy(null);
     if (error) { setError(error.message); return; }
-    setOk(`Train ${t.train_no} removed from the board.`);
+    setOk(done);
     load();
   }
+  const remove = (t: Train) => update(t, { status: "removed" }, `Train ${t.train_no} removed from the board.`);
+  const setInterval_ = (t: Train, m: number) =>
+    update(t, { refresh_minutes: m }, `Train ${t.train_no} will now be checked every ${intervalLabel(m)}.`);
+  const checkNow = (t: Train) =>
+    update(t, { next_check_at: new Date().toISOString() }, `Train ${t.train_no} will be checked in the next run, within 15 minutes.`);
 
-  const live = trains.filter(t => ["queued", "active", "error"].includes(t.status));
-  const done = trains.filter(t => !["queued", "active", "error"].includes(t.status));
+  const live = trains.filter(t => LIVE.includes(t.status));
+  const done = trains.filter(t => !LIVE.includes(t.status));
   const shown = showDone ? done : live;
 
   return (
@@ -87,6 +106,11 @@ export default function TrainsPanel({ userId, isAdmin }: { userId: string; isAdm
             </label>
             <label htmlFor="jdate">Journey date from NDLS
               <input id="jdate" type="date" min={todayIST()} required value={date} onChange={e => setDate(e.target.value)} />
+            </label>
+            <label htmlFor="every">Check seats every
+              <select id="every" value={every} onChange={e => setEvery(Number(e.target.value))}>
+                {INTERVALS.map(m => <option key={m} value={m}>{intervalLabel(m)}</option>)}
+              </select>
             </label>
             <button className="btn" type="submit" disabled={busy}>{busy ? "Adding…" : "Add to board"}</button>
           </div>
@@ -109,10 +133,14 @@ export default function TrainsPanel({ userId, isAdmin }: { userId: string; isAdm
           <div className="tablewrap">
             <table>
               <thead>
-                <tr><th>Train</th><th>Date</th><th>Dep NDLS</th><th>Status</th><th>Stops</th><th>Last check</th><th>Next check</th><th><span className="sr">Actions</span></th></tr>
+                <tr><th>Train</th><th>Date</th><th>Dep NDLS</th><th>Status</th><th>Stops</th><th>Last check</th><th>Check every</th><th>Next check</th><th><span className="sr">Actions</span></th></tr>
               </thead>
               <tbody>
-                {shown.map(t => (
+                {shown.map(t => {
+                  const live = LIVE.includes(t.status);
+                  const mine = t.added_by === userId || isAdmin;
+                  const due = new Date(t.next_check_at).getTime() <= Date.now() + 60_000;
+                  return (
                   <tr key={t.id}>
                     <td><span className="tno">{t.train_no}</span><br /><span className="lede">{t.train_name ?? "Name pending first check"}</span></td>
                     <td className="num">{dmy(t.journey_date)}</td>
@@ -123,14 +151,28 @@ export default function TrainsPanel({ userId, isAdmin }: { userId: string; isAdm
                     </td>
                     <td className="num">{t.stops?.length || "–"}</td>
                     <td className="num">{hhmm(t.checked_at)}</td>
-                    <td className="num">{["queued", "active", "error"].includes(t.status) ? hhmm(t.next_check_at) : "–"}</td>
                     <td>
-                      {["queued", "active", "error"].includes(t.status) && (t.added_by === userId || isAdmin) && (
-                        <button className="btn no sm" type="button" onClick={() => remove(t)}>Remove</button>
+                      {live && mine ? (
+                        <select aria-label={`Check train ${t.train_no} every`} className="sm" value={t.refresh_minutes}
+                          disabled={rowBusy === t.id} onChange={e => setInterval_(t, Number(e.target.value))}>
+                          {INTERVALS.map(m => <option key={m} value={m}>{intervalLabel(m)}</option>)}
+                        </select>
+                      ) : <span className="num">{intervalLabel(t.refresh_minutes)}</span>}
+                    </td>
+                    <td className="num">{!live ? "–" : due ? "Next run" : hhmm(t.next_check_at)}</td>
+                    <td>
+                      {live && mine && (
+                        <div className="actions">
+                          {t.checked_at && !due && (
+                            <button className="btn ghost sm" type="button" disabled={rowBusy === t.id} onClick={() => checkNow(t)}>Check now</button>
+                          )}
+                          <button className="btn no sm" type="button" disabled={rowBusy === t.id} onClick={() => remove(t)}>Remove</button>
+                        </div>
                       )}
                     </td>
                   </tr>
-                ))}
+                  );
+                })}
               </tbody>
             </table>
           </div>

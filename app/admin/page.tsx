@@ -1,5 +1,6 @@
 import Header from "@/components/Header";
 import AdminPanel from "@/components/AdminPanel";
+import DefaultInterval from "@/components/DefaultInterval";
 import { requireApproved } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
@@ -15,6 +16,7 @@ export default async function AdminPage() {
           <p className="lede">Staff who register appear here as pending. Approve them to let them sign in and add trains.</p>
         </div>
         <AdminPanel selfId={profile.id} />
+        <DefaultInterval />
       </main>
     </>
   );

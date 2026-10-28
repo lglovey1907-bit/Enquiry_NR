@@ -3,11 +3,12 @@
 import Link from "next/link";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
+import { intervalLabel } from "@/lib/intervals";
 
 type Stop = { code: string; name: string; seats: Record<string, number> | null };
 type Train = {
   train_no: string; journey_date: string; train_name: string | null; dep_at: string;
-  checked_at: string; next_check_at: string; chart_ready: boolean | null; stops: Stop[];
+  checked_at: string; next_check_at: string; chart_ready: boolean | null; stops: Stop[]; refresh_minutes: number;
 };
 
 const IST = "Asia/Kolkata";
@@ -17,7 +18,7 @@ const NOTICES = [
   "करंट बुकिंग टिकट पीआरएस काउंटर एवं आईआरसीटीसी पर उपलब्ध हैं",
   "Please check NTES for actual train running time before boarding",
   "यात्रा से पहले गाड़ी की वास्तविक स्थिति NTES पर देखें",
-  "Seat figures are refreshed every 30 minutes and may change at the time of booking",
+  "Seat figures are refreshed at regular intervals and may change at the time of booking",
 ];
 
 const hhmm = (d: Date) => new Intl.DateTimeFormat("en-IN", { hour: "2-digit", minute: "2-digit", hour12: false, timeZone: IST }).format(d);
@@ -109,7 +110,7 @@ function Meta({ t, now }: { t: Train; now: Date }) {
   const dep = new Date(t.dep_at), nx = new Date(t.next_check_at), toDep = dep.getTime() - now.getTime();
   return (
     <div className="b-meta">
-      <span>Updated <b>{hhmm(new Date(t.checked_at))}</b></span>
+      <span>Updated <b>{hhmm(new Date(t.checked_at))}</b> · every {intervalLabel(t.refresh_minutes)}</span>
       {nx >= dep ? <span>No further checks</span>
         : nx <= now ? <span className="due">Update in progress</span>
         : <span>Next check <b>{hhmm(nx)}</b></span>}
@@ -133,7 +134,7 @@ export default function Board() {
   const load = useCallback(async () => {
     const { data, error } = await createClient()
       .from("trains")
-      .select("train_no,journey_date,train_name,dep_at,checked_at,next_check_at,chart_ready,stops")
+      .select("train_no,journey_date,train_name,dep_at,checked_at,next_check_at,chart_ready,stops,refresh_minutes")
       .in("status", ["active", "error"])
       .not("checked_at", "is", null)
       .gt("dep_at", new Date().toISOString())
@@ -240,7 +241,7 @@ export default function Board() {
         <div className="b-main-in">
           <div className="b-info">
             <span>Trains on board <b>{loaded ? shown.length : "–"}</b></span>
-            <span>Refresh <b>Every 30 min per train</b></span>
+            <span>Refresh <b>Set for each train</b></span>
             <span>Quota <b>General · Current Booking</b></span>
           </div>
 
