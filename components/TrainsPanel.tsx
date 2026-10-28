@@ -9,8 +9,17 @@ type Train = {
   id: number; train_no: string; journey_date: string; train_name: string | null; dep_at: string | null;
   added_at: string; added_by: string | null; status: "queued" | "active" | "departed" | "removed" | "error";
   checked_at: string | null; next_check_at: string; stops: Stop[]; last_error: string | null; refresh_minutes: number;
+  chart_ready: boolean | null;
+};
+type Ref = {
+  train_no: string; train_name: string; destination: string | null; destination_code: string | null;
+  ndls_departure: string | null; runs_on: string | null; days_codes: number[] | null; platform: number | null;
 };
 const LIVE = ["queued", "active", "error"];
+const DAY = ["", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+/** ISO weekday (1 = Mon … 7 = Sun) of a YYYY-MM-DD date. */
+const isoDow = (d: string) => { const w = new Date(d + "T12:00:00Z").getUTCDay(); return w === 0 ? 7 : w; };
+const hasSeats = (t: Train) => (t.stops ?? []).some(s => Object.values(s.seats ?? {}).some(n => Number(n) > 0));
 
 const IST = "Asia/Kolkata";
 const todayIST = () => new Intl.DateTimeFormat("en-CA", { timeZone: IST }).format(new Date());
@@ -18,7 +27,7 @@ const hhmm = (s: string | null) => s ? new Intl.DateTimeFormat("en-IN", { hour: 
 const dmy = (d: string) => new Date(d + "T00:00:00+05:30").toLocaleDateString("en-IN", { day: "2-digit", month: "short", timeZone: IST });
 
 const STATUS_LABEL: Record<Train["status"], string> = {
-  queued: "Waiting for first check", active: "On board", departed: "Departed", removed: "Removed", error: "Check failed",
+  queued: "Waiting for first check", active: "Being checked", departed: "Departed", removed: "Removed", error: "Check failed",
 };
 
 export default function TrainsPanel({ userId, isAdmin }: { userId: string; isAdmin: boolean }) {
@@ -32,12 +41,19 @@ export default function TrainsPanel({ userId, isAdmin }: { userId: string; isAdm
   const [showDone, setShowDone] = useState(false);
   const [every, setEvery] = useState<number>(30);
   const [rowBusy, setRowBusy] = useState<number | null>(null);
+  const [refList, setRefList] = useState<Ref[]>([]);
 
-  // New trains start with the admin's default interval.
+  // New trains start with the admin's default interval; the picker lists reserved NDLS departures.
   useEffect(() => {
-    createClient().from("settings").select("default_refresh_minutes").eq("id", 1).maybeSingle()
+    const sb = createClient();
+    sb.from("settings").select("default_refresh_minutes").eq("id", 1).maybeSingle()
       .then(({ data }) => { if (data?.default_refresh_minutes) setEvery(data.default_refresh_minutes); });
+    sb.from("ndls_trains").select("train_no,train_name,destination,destination_code,ndls_departure,runs_on,days_codes,platform")
+      .order("ndls_departure").then(({ data }) => { if (data) setRefList(data as Ref[]); });
   }, []);
+
+  const picked = refList.find(r => r.train_no === trainNo) ?? null;
+  const runsThatDay = !picked?.days_codes || picked.days_codes.includes(isoDow(date));
 
   const load = useCallback(async () => {
     const supabase = createClient();
@@ -58,7 +74,8 @@ export default function TrainsPanel({ userId, isAdmin }: { userId: string; isAdm
   async function addTrain(e: React.FormEvent) {
     e.preventDefault();
     setError(""); setOk("");
-    if (!/^\d{5}$/.test(trainNo)) { setError("Train number must be 5 digits."); return; }
+    if (!/^\d{5}$/.test(trainNo)) { setError("Choose a train from the list, or type its 5-digit number."); return; }
+    if (/^[56]/.test(trainNo)) { setError(`${trainNo} is an unreserved passenger/MEMU train. Only reserved trains have current booking.`); return; }
     setBusy(true);
     const { error } = await createClient().from("trains").insert({ train_no: trainNo, journey_date: date, refresh_minutes: every });
     setBusy(false);
@@ -100,9 +117,16 @@ export default function TrainsPanel({ userId, isAdmin }: { userId: string; isAdm
         <h2 id="add-h">Add a train</h2>
         <form onSubmit={addTrain}>
           <div className="row">
-            <label htmlFor="tno">Train number
-              <input id="tno" inputMode="numeric" maxLength={5} placeholder="e.g. 12002" required value={trainNo}
-                onChange={e => setTrainNo(e.target.value.replace(/\D/g, ""))} />
+            <label htmlFor="tno" style={{ flexBasis: 260 }}>Train <span className="hint">Reserved trains departing NDLS · {refList.length || "…"} listed</span>
+              <input id="tno" list="ndls-reserved" inputMode="numeric" autoComplete="off" placeholder="Type number or pick, e.g. 12002"
+                required value={trainNo} onChange={e => setTrainNo(e.target.value.replace(/\D/g, "").slice(0, 5))} />
+              <datalist id="ndls-reserved">
+                {refList.map(r => (
+                  <option key={r.train_no} value={r.train_no}>
+                    {`${r.train_name} · dep ${r.ndls_departure ?? "–"} · to ${r.destination_code ?? "?"} · ${r.runs_on ?? ""}`}
+                  </option>
+                ))}
+              </datalist>
             </label>
             <label htmlFor="jdate">Journey date from NDLS
               <input id="jdate" type="date" min={todayIST()} required value={date} onChange={e => setDate(e.target.value)} />
@@ -114,6 +138,19 @@ export default function TrainsPanel({ userId, isAdmin }: { userId: string; isAdm
             </label>
             <button className="btn" type="submit" disabled={busy}>{busy ? "Adding…" : "Add to board"}</button>
           </div>
+          {trainNo.length === 5 && (
+            picked ? (
+              <div className={`msg ${runsThatDay ? "info" : "err"}`}>
+                <b>{picked.train_no} {picked.train_name}</b> · dep NDLS {picked.ndls_departure ?? "–"}
+                {picked.platform != null && <> · PF {picked.platform}</>} · to {picked.destination ?? picked.destination_code} · runs {picked.runs_on}
+                {!runsThatDay && <> — <b>does not run on {DAY[isoDow(date)]} {dmy(date)}</b>. Check the date.</>}
+              </div>
+            ) : /^[56]/.test(trainNo) ? (
+              <div className="msg err">{trainNo} is unreserved (passenger/MEMU). Only reserved trains can be added.</div>
+            ) : (
+              <div className="msg info">{trainNo} is not in the NDLS reserved list. Check the number; it can still be added if it is a special train.</div>
+            )
+          )}
           {error && <div className="msg err" role="alert">{error}</div>}
           {ok && <div className="msg ok" role="status">{ok}</div>}
         </form>
@@ -147,6 +184,14 @@ export default function TrainsPanel({ userId, isAdmin }: { userId: string; isAdm
                     <td className="num">{hhmm(t.dep_at)}</td>
                     <td>
                       <span className={`pill ${t.status}`}>{STATUS_LABEL[t.status]}</span>
+                      {live && (
+                        <div className="lede" style={{ fontSize: ".78rem", marginTop: 4 }}>
+                          {!t.checked_at ? "Hidden on board until first check"
+                            : t.chart_ready === false ? "Hidden on board: chart not prepared"
+                            : !hasSeats(t) ? "Hidden on board: no current-booking seats"
+                            : "Showing on board"}
+                        </div>
+                      )}
                       {t.status === "error" && t.last_error && <div className="lede" style={{ fontSize: ".8rem" }}>{t.last_error}</div>}
                     </td>
                     <td className="num">{t.stops?.length || "–"}</td>

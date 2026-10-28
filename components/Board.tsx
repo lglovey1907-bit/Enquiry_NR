@@ -23,6 +23,7 @@ const NOTICES = [
 
 const hhmm = (d: Date) => new Intl.DateTimeFormat("en-IN", { hour: "2-digit", minute: "2-digit", hour12: false, timeZone: IST }).format(d);
 const leftText = (ms: number) => { const m = Math.max(0, Math.round(ms / 60000)), h = Math.floor(m / 60); return h ? `${h}h ${m % 60}m` : `${m}m`; };
+const hasSeats = (t: { stops: Stop[] }) => (t.stops ?? []).some(s => Object.values(s.seats ?? {}).some(n => Number(n) > 0));
 const sig = (n: number) => (n === 0 ? "b-stopc" : n <= 10 ? "b-caution" : "b-go");
 
 function useReducedMotion() {
@@ -157,7 +158,9 @@ export default function Board() {
 
   // Trains at or past departure slide off, then drop from the list.
   const keyOf = (t: Train) => `${t.train_no}-${t.journey_date}`;
-  const live = useMemo(() => (now ? trains.filter(t => new Date(t.dep_at) > now) : trains), [trains, now]);
+  // Only trains whose chart is prepared and that have at least one current-booking seat, until departure.
+  const live = useMemo(() => trains.filter(t =>
+    (!now || new Date(t.dep_at) > now) && t.chart_ready !== false && hasSeats(t)), [trains, now]);
   const [shown, setShown] = useState<Train[]>([]);
   useEffect(() => {
     const liveKeys = new Set(live.map(keyOf));
@@ -240,7 +243,7 @@ export default function Board() {
       <main className="b-main b-gut">
         <div className="b-main-in">
           <div className="b-info">
-            <span>Trains on board <b>{loaded ? shown.length : "–"}</b></span>
+            <span>Trains with seats <b>{loaded ? shown.length : "–"}</b></span>
             <span>Refresh <b>Set for each train</b></span>
             <span>Quota <b>General · Current Booking</b></span>
           </div>
@@ -248,7 +251,7 @@ export default function Board() {
           <div className="b-list" ref={listRef} aria-label="Current booking seats from New Delhi by train, destination and class">
             {!loaded ? <div className="b-empty">Loading trains…</div>
               : failed && shown.length === 0 ? <div className="b-empty"><b>Board data unavailable</b>Check the internet connection. The board retries every minute.</div>
-              : shown.length === 0 ? <div className="b-empty"><b>No trains on the board</b>Trains appear here once staff add them and their seats have been checked. Each train leaves the board at its departure time.</div>
+              : shown.length === 0 ? <div className="b-empty"><b>No current-booking seats right now</b>Trains appear here once their reservation chart is prepared and current-booking seats are available. Each train leaves the board at its departure time.</div>
               : shown.map((t, i) => (
                 <article key={keyOf(t)} data-row={keyOf(t)} className={`b-row${leaving.has(keyOf(t)) ? " out" : ""}`} style={{ animationDelay: `${i * 0.12}s` }}>
                   <div className="b-train">
