@@ -1,10 +1,12 @@
-import { redirect } from "next/navigation";
-import { getSession } from "@/lib/auth";
+import type { Metadata } from "next";
+import Board from "@/components/Board";
+import "./board.css";
 
-export default async function Home() {
-  const { user, profile } = await getSession();
-  if (!user) redirect("/login");
-  if (!profile) redirect("/register?step=details");
-  if (profile.status !== "approved") redirect("/pending");
-  redirect(profile.role === "admin" ? "/admin" : "/dashboard");
+export const metadata: Metadata = {
+  title: "NDLS Current Booking Board",
+  description: "Live current-booking seats from New Delhi, by train, destination and class",
+};
+
+export default function HomePage() {
+  return <Board />;
 }

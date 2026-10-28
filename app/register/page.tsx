@@ -62,7 +62,7 @@ function Register() {
     // Already registered? Send them to their status page instead of re-registering.
     const { data: existing } = await supabase.from("profiles").select("id").eq("id", data.user.id).maybeSingle();
     setBusy(false); setInfo("");
-    if (existing) { router.replace("/"); router.refresh(); return; }
+    if (existing) { router.replace("/staff"); router.refresh(); return; }
     setStep("details");
   }
 

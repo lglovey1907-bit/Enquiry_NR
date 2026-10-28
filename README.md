@@ -4,7 +4,7 @@ Staff register with their email (verified by a 6-digit code sent from the Commer
 
 - **Admin:** loveyy.cmi@gmail.com (approved automatically on registration)
 - **Database:** Supabase project `nr-enquiry-system` (Mumbai) — already set up, nothing to run
-- **Pages:** `/register`, `/login`, `/dashboard` (add / remove trains), `/admin` (approve, reject, disable staff)
+- **Pages:** `/` the public live board (no login, for the counter screen), `/login`, `/register`, `/dashboard` (add / remove trains), `/admin` (approve, reject, disable staff)
 
 ## One-time setup (about 15 minutes)
 
@@ -51,6 +51,9 @@ Set the subject to `Your NR Enquiry Desk code`. Do the same for the **Confirm si
 
 ### 4. First sign-in
 Register at `/register` with loveyy.cmi@gmail.com — your account is approved as admin straight away. Staff who register after that appear under **Staff approvals**.
+
+## Counter screen
+Open the site's main address on the counter TV and press F11 for full screen. It shows every train that has been checked and not yet departed, refreshes every minute, scrolls long routes sideways, and drops each train at its departure time. Anyone can view it without signing in; it shows only train numbers, stops and seat counts.
 
 ## How seat checks run
 Four scheduled tasks on the Commercial Branch computer (Enquiry board worker :05, :20, :35, :50) run every 15 minutes. Each run marks departed trains, checks any train that is new or due (every 30 minutes from when it was added, only on its journey date), saves the result in Supabase and updates the counter board. The computer must be on and awake with the Claude desktop app open.

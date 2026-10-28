@@ -11,6 +11,7 @@ export default function Header({ profile, active }: { profile: Profile | null; a
         </div>
         <nav className="nav" aria-label="Main">
           {profile && <span className="who">{profile.full_name} · {profile.hrms_id}</span>}
+          <Link href="/" target="_blank" rel="noopener">Live board</Link>
           {profile?.status === "approved" && (
             <Link href="/dashboard" className={active === "dashboard" ? "active" : ""}>Trains</Link>
           )}

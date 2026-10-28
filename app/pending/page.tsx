@@ -8,7 +8,7 @@ export default async function PendingPage() {
   const { user, profile } = await getSession();
   if (!user) redirect("/login");
   if (!profile) redirect("/register?step=details");
-  if (profile.status === "approved") redirect("/");
+  if (profile.status === "approved") redirect("/staff");
 
   const text = {
     pending: { title: "Waiting for approval", body: "Your registration has reached the admin. You can sign in and enter trains once it is approved." },
