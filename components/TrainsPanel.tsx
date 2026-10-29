@@ -59,7 +59,7 @@ export default function TrainsPanel() {
   }
   const hide = (t: Train) => update(t, { status: "removed" }, `Train ${t.train_no} is hidden from the board and won't be checked again today.`);
   const checkNow = (t: Train) =>
-    update(t, { next_check_at: new Date().toISOString() }, `Train ${t.train_no} is checked in the next update (within 15 minutes).`);
+    update(t, { next_check_at: new Date().toISOString() }, `Train ${t.train_no} is checked in the next board update.`);
 
   const live = trains.filter(t => LIVE.includes(t.status));
   const done = trains.filter(t => !LIVE.includes(t.status));

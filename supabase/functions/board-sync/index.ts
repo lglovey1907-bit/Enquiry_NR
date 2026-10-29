@@ -1,4 +1,4 @@
-// NDLS current-booking board sync. Runs every 15 minutes (pg_cron -> pg_net -> here).
+// NDLS current-booking board sync. pg_cron ticks every 5 minutes; runs every settings.sync_minutes (admin setting).
 // 1. Marks departed trains.  2. Reads RailRadar's NDLS live board: adds reserved trains departing in the
 // next 4 hours, with expected departure, delay and platform.  3. Learns each train's classes and halts
 // once from its schedule.  4. Fetches current-booking seats within a daily request budget.
@@ -6,7 +6,7 @@ import postgres from "npm:postgres@3.4.4";
 
 const BASE = "https://api.railradar.in/v1";
 const WINDOW_H = 4;
-const BOARD_EVERY_MIN = 20;          // live board refresh
+const BOARD_MIN_EVERY = 10;         // live board refresh at most this often
 const RUN_MAX_CALLS = 40;            // per run (rate limit is 30/min; calls are paced)
 const RUN_MAX_MS = 125_000;          // stop starting new calls after this
 const GAP_MS = 2_100;                // pacing between calls
@@ -41,7 +41,15 @@ Deno.serve(async (req) => {
   let calls = 0, lastCall = 0, stopAll = false;
 
   // ---- request budget -------------------------------------------------------------------------
-  const [s] = await sql`select default_refresh_minutes, board_fetched_at, month_reserve from public.settings where id = 1`;
+  const [s] = await sql`select default_refresh_minutes, board_fetched_at, month_reserve, sync_minutes, last_sync_at
+                         from public.settings where id = 1`;
+  // The scheduler ticks every 5 minutes; run only when the admin's interval has passed.
+  const every = s?.sync_minutes ?? 15;
+  if (s?.last_sync_at && Date.now() - new Date(s.last_sync_at).getTime() < (every * 60 - 90) * 1000) {
+    await sql.end();
+    return Response.json({ ok: true, skipped: true });
+  }
+  await sql`update public.settings set last_sync_at = now() where id = 1`;   // start time of this run
   const [u] = await sql`select calls, month_limit, month_remaining from public.api_usage
                         where day = (now() at time zone 'Asia/Kolkata')::date`;
   const [last] = await sql`select month_remaining from public.api_usage where month_remaining is not null order by day desc limit 1`;
@@ -57,7 +65,7 @@ Deno.serve(async (req) => {
                                           Math.floor((monthLimit / 30) * 1.5)));
   const leftToday = Math.max(0, allowToday - callsToday);
   const minsLeftToday = 24 * 60 - (ist.getUTCHours() * 60 + ist.getUTCMinutes());
-  const runsLeft = Math.max(1, Math.ceil(minsLeftToday / 15));
+  const runsLeft = Math.max(1, Math.ceil(minsLeftToday / every));
   let runBudget = Math.min(RUN_MAX_CALLS, leftToday, Math.max(10, Math.ceil((leftToday / runsLeft) * 1.5)));
   log.push(`budget ${runBudget} (today ${callsToday}/${allowToday}, month left ${remaining})`);
 
@@ -83,7 +91,7 @@ Deno.serve(async (req) => {
                where status in ('queued','active','error') and coalesce(expected_dep_at, dep_at) <= now()`;
 
     // ---- 2. live board ---------------------------------------------------------------------------
-    const boardDue = !s?.board_fetched_at || Date.now() - new Date(s.board_fetched_at).getTime() > (BOARD_EVERY_MIN - 1) * 60000;
+    const boardDue = !s?.board_fetched_at || Date.now() - new Date(s.board_fetched_at).getTime() > (Math.max(BOARD_MIN_EVERY, every) - 1) * 60000;
     let boardOk = false;
     if (boardDue && canCall()) {
       const { status, body } = await rr(`/stations/NDLS/live?hours=${WINDOW_H}`);
@@ -239,7 +247,7 @@ Deno.serve(async (req) => {
     log.push(`error: ${String(e).slice(0, 200)}`);
   }
   const note = log.join(" · ").slice(0, 1000);
-  await sql`update public.settings set last_sync_at = now(), last_sync_note = ${note} where id = 1`;
+  await sql`update public.settings set last_sync_note = ${note} where id = 1`;
   await sql.end();
   return Response.json({ ok: true, calls, note });
 });

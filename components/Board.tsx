@@ -25,7 +25,7 @@ const hhmm = (d: Date) => new Intl.DateTimeFormat("en-IN", { hour: "2-digit", mi
 const leftText = (ms: number) => { const m = Math.max(0, Math.round(ms / 60000)), h = Math.floor(m / 60); return h ? `${h}h ${m % 60}m` : `${m}m`; };
 const WINDOW_MS = 4 * 3600_000;   // board shows trains departing within the next 4 hours
 const PAGE_SIZE = 6;              // trains per frame
-const PAGE_MS = 30_000;           // each frame stays 30 seconds, then the next one; loops
+const PAGE_MS = 20_000;           // each frame stays 20 seconds, then the next one; loops
 const LATE_MIN = 5;               // delay shown as "running late" from this many minutes
 /** Expected departure if the train is running late, else scheduled. */
 const depOf = (t: Train) => new Date(t.expected_dep_at ?? t.dep_at);

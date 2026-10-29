@@ -19,7 +19,7 @@ export default async function DashboardPage() {
             about, or Hide to take a train off the board.
           </p>
         </div>
-        <SyncStatus />
+        <SyncStatus isAdmin={profile.role === "admin"} />
         <DefaultInterval />
         <TrainsPanel />
       </main>
