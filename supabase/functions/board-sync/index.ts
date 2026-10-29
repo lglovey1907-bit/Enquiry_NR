@@ -7,8 +7,8 @@ import postgres from "npm:postgres@3.4.4";
 const BASE = "https://api.railradar.in/v1";
 const WINDOW_H = 4;
 const BOARD_MIN_EVERY = 10;         // live board refresh at most this often
-const RUN_MAX_CALLS = 40;            // per run (rate limit is 30/min; calls are paced)
-const RUN_MAX_MS = 125_000;          // stop starting new calls after this
+const RUN_MAX_CALLS = 55;            // per run (rate limit is 30/min; calls are paced 2.1 s apart)
+const RUN_MAX_MS = 130_000;          // stop starting new calls after this
 const GAP_MS = 2_100;                // pacing between calls
 const SKIP_TYPES = /(EMU|MEMU|DEMU|PASSENGER|LOCAL|SUBURBAN)/i;
 const CLASS_ORDER = ["1A", "2A", "3A", "3E", "SL", "EA", "EC", "CC", "2S"];
@@ -182,14 +182,14 @@ Deno.serve(async (req) => {
     }
 
     // ---- 4. seats --------------------------------------------------------------------------------
-    const due = await sql`select t.id, t.train_no, t.journey_date::text jd, n.stop_codes, n.classes, n.stop_names
+    const due = await sql`select t.id, t.train_no, t.journey_date::text jd, t.checked_at, n.stop_codes, n.classes, n.stop_names
                           from public.trains t join public.ndls_trains n using (train_no)
                           where t.status in ('queued','active','error')
                             and t.next_check_at <= now() + interval '2 minutes'
                             and coalesce(t.expected_dep_at, t.dep_at) > now() + interval '15 minutes'
                             and t.dep_at <= now() + interval '4 hours'
                           order by (t.checked_at is null) desc, coalesce(t.expected_dep_at, t.dep_at)
-                          limit 12`;
+                          limit 16`;
     let checked = 0;
     for (const t of due) {
       const cls: string[] = t.classes?.length ? t.classes : ["SL", "3A", "2A", "CC"];
@@ -199,11 +199,14 @@ Deno.serve(async (req) => {
       const codes: string[] = t.stop_codes ?? [];
       if (!codes.length) continue;
       const final = codes[codes.length - 1];
-      const extra = [codes[0], codes[Math.floor((codes.length - 1) / 2)]].filter((c, i, a) => c !== final && a.indexOf(c) === i);
+      // Final destination for every class first (one request each). Then, only for classes with no
+      // seats to the final destination, the first halt; on rechecks also the middle halt.
+      const extra = [codes[0], ...(t.checked_at ? [codes[Math.floor((codes.length - 1) / 2)]] : [])]
+        .filter((c, i, a) => c !== final && a.indexOf(c) === i);
       const plan: [string, string][] = [];
       cls.forEach(c => plan.push([final, c]));
       extra.forEach(d => cls.forEach(c => plan.push([d, c])));
-      const cap = Math.min(plan.length, Math.max(cls.length, 12));
+      const cap = Math.min(plan.length, 10);
       const seats: Record<string, Record<string, number>> = {};
       let chart: boolean | null = null, failed = 0, missing = 0, asked = 0;
       for (const [dest, c] of plan.slice(0, cap)) {

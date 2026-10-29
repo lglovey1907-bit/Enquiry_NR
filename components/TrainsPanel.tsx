@@ -8,7 +8,7 @@ type Train = {
   id: number; train_no: string; journey_date: string; train_name: string | null; dep_at: string | null;
   added_at: string; added_by: string | null; status: "queued" | "active" | "departed" | "removed" | "error";
   checked_at: string | null; next_check_at: string; stops: Stop[]; last_error: string | null; refresh_minutes: number;
-  chart_ready: boolean | null;
+  chart_ready: boolean | null; expected_dep_at: string | null; delay_min: number | null; platform: string | null;
 };
 const LIVE = ["queued", "active", "error"];
 const IST = "Asia/Kolkata";
@@ -113,7 +113,9 @@ export default function TrainsPanel() {
                   return (
                     <tr key={t.id}>
                       <td><span className="tno">{t.train_no}</span><br /><span className="lede">{t.train_name ?? ""}</span></td>
-                      <td className="num">{hhmm(t.dep_at)}<br /><span className="lede">{isLive ? left(t.dep_at) : ""}</span></td>
+                      <td className="num">{hhmm(t.dep_at)}
+                        {(t.delay_min ?? 0) >= 5 && <><br /><span style={{ color: "var(--warn, #b45309)", fontWeight: 600 }}>Late {t.delay_min} min · exp {hhmm(t.expected_dep_at)}</span></>}
+                        <br /><span className="lede">{isLive ? left(t.expected_dep_at ?? t.dep_at) : ""}{t.platform ? ` · PF ${t.platform}` : ""}</span></td>
                       <td>
                         <span className={`pill ${t.status}`}>{STATUS_LABEL[t.status]}</span>
                         {isLive && (
