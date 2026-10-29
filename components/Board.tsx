@@ -3,12 +3,12 @@
 import Link from "next/link";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
-import { intervalLabel } from "@/lib/intervals";
 
 type Stop = { code: string; name: string; seats: Record<string, number> | null };
 type Train = {
   train_no: string; journey_date: string; train_name: string | null; dep_at: string;
   checked_at: string; next_check_at: string; chart_ready: boolean | null; stops: Stop[]; refresh_minutes: number;
+  expected_dep_at: string | null; delay_min: number | null; running_note: string | null; running_checked_at: string | null;
 };
 
 const IST = "Asia/Kolkata";
@@ -24,6 +24,11 @@ const NOTICES = [
 const hhmm = (d: Date) => new Intl.DateTimeFormat("en-IN", { hour: "2-digit", minute: "2-digit", hour12: false, timeZone: IST }).format(d);
 const leftText = (ms: number) => { const m = Math.max(0, Math.round(ms / 60000)), h = Math.floor(m / 60); return h ? `${h}h ${m % 60}m` : `${m}m`; };
 const WINDOW_MS = 4 * 3600_000;   // board shows trains departing within the next 4 hours
+const PAGE_SIZE = 6;              // trains per frame
+const PAGE_MS = 30_000;           // each frame stays 30 seconds, then the next one; loops
+const LATE_MIN = 5;               // delay shown as "running late" from this many minutes
+/** Expected departure if the train is running late, else scheduled. */
+const depOf = (t: Train) => new Date(t.expected_dep_at ?? t.dep_at);
 /** Keep only destinations with at least one class that has current-booking seats, and only those classes. */
 const availableOnly = (stops: Stop[]): Stop[] =>
   (stops ?? []).flatMap(s => {
@@ -113,17 +118,27 @@ function StopStrip({ train, reduce }: { train: Train; reduce: boolean }) {
   );
 }
 
+function Running({ t }: { t: Train }) {
+  if (t.delay_min == null) return null;
+  if (t.delay_min >= LATE_MIN) {
+    return (
+      <div className={`b-run late${t.delay_min >= 60 ? " big" : ""}`}>
+        <span lang="hi">देरी से</span> Running late {leftText(t.delay_min * 60000)}
+        <small>Exp. dep <b>{hhmm(depOf(t))}</b>{t.running_note ? ` · ${t.running_note}` : ""}</small>
+      </div>
+    );
+  }
+  return <div className="b-run ok"><span lang="hi">समय पर</span> On time</div>;
+}
+
 function Meta({ t, now }: { t: Train; now: Date }) {
-  const dep = new Date(t.dep_at), nx = new Date(t.next_check_at), toDep = dep.getTime() - now.getTime();
+  const dep = depOf(t), nx = new Date(t.next_check_at), toDep = dep.getTime() - now.getTime();
   return (
     <div className="b-meta">
-      <span>Updated <b>{hhmm(new Date(t.checked_at))}</b> · every {intervalLabel(t.refresh_minutes)}</span>
-      {nx >= dep ? <span>No further checks</span>
-        : nx <= now ? <span className="due">Update in progress</span>
-        : <span>Next check <b>{hhmm(nx)}</b></span>}
       {toDep <= 15 * 60000
         ? <span className="leaving">Departing in {leftText(toDep)}</span>
         : <span>Departs in <b>{leftText(toDep)}</b></span>}
+      <span>Seats at <b>{hhmm(new Date(t.checked_at))}</b>{nx <= now && nx < dep ? <em className="due"> · updating</em> : null}</span>
     </div>
   );
 }
@@ -141,10 +156,10 @@ export default function Board() {
   const load = useCallback(async () => {
     const { data, error } = await createClient()
       .from("trains")
-      .select("train_no,journey_date,train_name,dep_at,checked_at,next_check_at,chart_ready,stops,refresh_minutes")
+      .select("train_no,journey_date,train_name,dep_at,checked_at,next_check_at,chart_ready,stops,refresh_minutes,expected_dep_at,delay_min,running_note,running_checked_at")
       .in("status", ["active", "error"])
       .not("checked_at", "is", null)
-      .gt("dep_at", new Date().toISOString())
+      .or(`dep_at.gt.${new Date().toISOString()},expected_dep_at.gt.${new Date().toISOString()}`)
       .order("dep_at");
     if (error) { setFailed(true); setLoaded(true); return; }
     setFailed(false);
@@ -169,9 +184,10 @@ export default function Board() {
   const live = useMemo(() => {
     const t0 = (now ?? new Date()).getTime();
     return trains
-      .filter(t => { const d = new Date(t.dep_at).getTime(); return d > t0 && d <= t0 + WINDOW_MS && t.chart_ready !== false; })
+      .filter(t => { const d = depOf(t).getTime(); return d > t0 && new Date(t.dep_at).getTime() <= t0 + WINDOW_MS && t.chart_ready !== false; })
       .map(t => ({ ...t, stops: availableOnly(t.stops) }))
-      .filter(t => t.stops.length > 0);
+      .filter(t => t.stops.length > 0)
+      .sort((a, b) => depOf(a).getTime() - depOf(b).getTime());
   }, [trains, now]);
   const [shown, setShown] = useState<Train[]>([]);
   useEffect(() => {
@@ -186,14 +202,26 @@ export default function Board() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [live, reduce]);
 
+  // Frames of 6 trains; each stays 30 s, then the next, looping.
+  const pageCount = Math.max(1, Math.ceil(shown.length / PAGE_SIZE));
+  const [page, setPage] = useState(0);
+  useEffect(() => { if (page >= pageCount) setPage(0); }, [page, pageCount]);
+  useEffect(() => {
+    if (pageCount <= 1) return;
+    const id = setInterval(() => setPage(p => (p + 1) % pageCount), PAGE_MS);
+    return () => clearInterval(id);
+  }, [pageCount]);
+  const frame = shown.slice(page * PAGE_SIZE, page * PAGE_SIZE + PAGE_SIZE);
+
   // Split-flap settle: digits roll briefly whenever a train's figures change.
   useEffect(() => {
     if (reduce || !listRef.current) return;
     const timers: number[] = [];
-    shown.forEach(t => {
+    frame.forEach(t => {
       const k = keyOf(t);
-      if (seen.current.get(k) === t.checked_at) return;
-      seen.current.set(k, t.checked_at);
+      const stamp = `${t.checked_at}|${page}`;
+      if (seen.current.get(k) === stamp) return;
+      seen.current.set(k, stamp);
       const row = listRef.current!.querySelector(`[data-row="${CSS.escape(k)}"]`);
       row?.querySelectorAll<HTMLElement>(".b-flap[data-final]").forEach((el, idx) => {
         const fin = el.dataset.final!;
@@ -207,14 +235,42 @@ export default function Board() {
       });
     });
     return () => timers.forEach(clearInterval);
-  }, [shown, reduce]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [shown, page, reduce]);
+
+  // Fit the whole board (6 trains, legend, ticker) on one screen on counter displays.
+  // A full 6-train frame sets the scale; shorter frames keep it so every page looks the same.
+  const rootRef = useRef<HTMLDivElement>(null);
+  const zoomRef = useRef<{ w: number; h: number; z: number } | null>(null);
+  const full = frame.length >= PAGE_SIZE;
+  useLayoutEffect(() => {
+    const el = rootRef.current;
+    if (!el) return;
+    const apply = (z: number) => {
+      if (z < 0.995) { el.style.setProperty("zoom", String(z)); el.style.setProperty("min-height", `${window.innerHeight / z}px`); }
+      else { el.style.removeProperty("zoom"); el.style.removeProperty("min-height"); }
+    };
+    const fit = () => {
+      const w = window.innerWidth, h = window.innerHeight;
+      if (w < 900) { zoomRef.current = null; apply(1); return; }
+      const kept = zoomRef.current;
+      if (!full && kept && kept.w === w && kept.h === h) { apply(kept.z); return; }
+      apply(1);
+      const z = Math.max(0.5, Math.min(1, h / el.scrollHeight));
+      if (full || !kept || kept.w !== w || kept.h !== h) zoomRef.current = full ? { w, h, z } : null;
+      apply(z);
+    };
+    fit();
+    window.addEventListener("resize", fit);
+    return () => window.removeEventListener("resize", fit);
+  }, [frame, full, loaded, now]);
 
   const clock = now ? hhmm(now).split(":") : ["--", "--"];
   const today = now ? now.toLocaleDateString("en-IN", { weekday: "short", day: "2-digit", month: "short", year: "numeric", timeZone: IST }).toUpperCase() : "";
   const notices = NOTICES.map((n, i) => <span key={i}>◆ {n}</span>);
 
   return (
-    <div className="b-root">
+    <div className="b-root" ref={rootRef}>
       <section className="b-band b-gut">
         <div className="b-band-in">
           <div>
@@ -256,20 +312,26 @@ export default function Board() {
         <div className="b-main-in">
           <div className="b-info">
             <span>Departing in next 4 hours with seats <b>{loaded ? shown.length : "–"}</b></span>
-            <span>Refresh <b>Set for each train</b></span>
             <span>Quota <b>General · Current Booking</b></span>
+            {pageCount > 1 && (
+              <span className="b-pager" aria-live="polite">
+                Page <b>{page + 1}</b> of <b>{pageCount}</b>
+                <span className="b-dots" aria-hidden="true">{Array.from({ length: pageCount }, (_, i) => <i key={i} className={i === page ? "on" : ""} />)}</span>
+                <span className="b-pbar" aria-hidden="true"><i key={`${page}-${pageCount}`} style={{ animationDuration: `${PAGE_MS}ms` }} /></span>
+              </span>
+            )}
           </div>
 
-          <div className="b-list" ref={listRef} aria-label="Current booking seats from New Delhi by train, destination and class">
+          <div className="b-list" key={`frame-${page}`} ref={listRef} aria-label="Current booking seats from New Delhi by train, destination and class">
             {!loaded ? <div className="b-empty">Loading trains…</div>
               : failed && shown.length === 0 ? <div className="b-empty"><b>Board data unavailable</b>Check the internet connection. The board retries every minute.</div>
               : shown.length === 0 ? <div className="b-empty"><b>No current-booking seats in the next 4 hours</b>Trains departing New Delhi in the next 4 hours appear here once their reservation chart is prepared and current-booking seats are available. Each train leaves the board at its departure time.</div>
-              : shown.map((t, i) => (
-                <article key={keyOf(t)} data-row={keyOf(t)} className={`b-row${leaving.has(keyOf(t)) ? " out" : ""}`} style={{ animationDelay: `${i * 0.12}s` }}>
+              : frame.map((t, i) => (
+                <article key={keyOf(t)} data-row={keyOf(t)} className={`b-row${leaving.has(keyOf(t)) ? " out" : ""}`} style={{ animationDelay: `${i * 0.08}s` }}>
                   <div className="b-train">
-                    <div className="b-tno">{t.train_no}</div>
+                    <div className="b-tline"><span className="b-tno">{t.train_no}</span><span className="b-tdep">Dep <b className={t.delay_min != null && t.delay_min >= LATE_MIN ? "struck" : ""}>{hhmm(new Date(t.dep_at))}</b></span></div>
                     <div className="b-tname">{t.train_name}</div>
-                    <div className="b-tdep">Dep NDLS {hhmm(new Date(t.dep_at))}</div>
+                    <Running t={t} />
                     {now && <Meta t={t} now={now} />}
                   </div>
                   {t.chart_ready === false ? (
@@ -278,7 +340,7 @@ export default function Board() {
                       <span className="b-dname">Current booking opens after the reservation chart is prepared</span>
                     </div></div></div>
                   ) : <StopStrip train={t} reduce={reduce} />}
-                  {now && new Date(t.dep_at).getTime() - now.getTime() <= 30 * 60000 && (
+                  {now && depOf(t).getTime() - now.getTime() <= 30 * 60000 && (
                     <div className="b-onboard" role="note">
                       <span lang="hi">प्रस्थान में 30 मिनट से कम समय · टिकट ट्रेन में ऑन-बोर्ड स्टाफ (टीटीई) से बनवाएं</span>
                       <span>Less than 30 min to departure · Ticket can be booked by on-board staff (TTE)</span>
