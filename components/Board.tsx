@@ -8,7 +8,7 @@ type Stop = { code: string; name: string; seats: Record<string, number> | null }
 type Train = {
   train_no: string; journey_date: string; train_name: string | null; dep_at: string;
   checked_at: string; next_check_at: string; chart_ready: boolean | null; stops: Stop[]; refresh_minutes: number;
-  expected_dep_at: string | null; delay_min: number | null; running_note: string | null; running_checked_at: string | null;
+  expected_dep_at: string | null; delay_min: number | null; running_note: string | null; running_checked_at: string | null; platform: string | null;
 };
 
 const IST = "Asia/Kolkata";
@@ -156,7 +156,7 @@ export default function Board() {
   const load = useCallback(async () => {
     const { data, error } = await createClient()
       .from("trains")
-      .select("train_no,journey_date,train_name,dep_at,checked_at,next_check_at,chart_ready,stops,refresh_minutes,expected_dep_at,delay_min,running_note,running_checked_at")
+      .select("train_no,journey_date,train_name,dep_at,checked_at,next_check_at,chart_ready,stops,refresh_minutes,expected_dep_at,delay_min,running_note,running_checked_at,platform")
       .in("status", ["active", "error"])
       .not("checked_at", "is", null)
       .or(`dep_at.gt.${new Date().toISOString()},expected_dep_at.gt.${new Date().toISOString()}`)
@@ -331,6 +331,7 @@ export default function Board() {
                   <div className="b-train">
                     <div className="b-tline"><span className="b-tno">{t.train_no}</span><span className="b-tdep">Dep <b className={t.delay_min != null && t.delay_min >= LATE_MIN ? "struck" : ""}>{hhmm(new Date(t.dep_at))}</b></span></div>
                     <div className="b-tname">{t.train_name}</div>
+                    {t.platform && <div className="b-pf">PF <b>{t.platform}</b> <span lang="hi">प्लेटफॉर्म</span></div>}
                     <Running t={t} />
                     {now && <Meta t={t} now={now} />}
                   </div>

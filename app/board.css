@@ -137,3 +137,5 @@
 @keyframes b-framein { from { opacity: 0; transform: translateX(24px); } to { opacity: 1; transform: none; } }
 @media (prefers-reduced-motion: reduce) { .b-list, .b-pbar i { animation: none; } }
 .b-onboard { padding: 4px 14px; font-size: .85rem; }
+.b-pf { font-size: .74rem; color: var(--dim); letter-spacing: .04em; }
+.b-pf b { display: inline-block; min-width: 1.6em; text-align: center; background: var(--enamel); color: var(--graphite); border-radius: 3px; padding: 0 4px; font-family: var(--f-head); font-size: .95rem; }

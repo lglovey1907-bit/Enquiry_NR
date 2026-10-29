@@ -1,6 +1,7 @@
 import Header from "@/components/Header";
 import TrainsPanel from "@/components/TrainsPanel";
 import DefaultInterval from "@/components/DefaultInterval";
+import SyncStatus from "@/components/SyncStatus";
 import { requireApproved } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
@@ -18,6 +19,7 @@ export default async function DashboardPage() {
             about, or Hide to take a train off the board.
           </p>
         </div>
+        <SyncStatus />
         <DefaultInterval />
         <TrainsPanel />
       </main>

@@ -59,7 +59,7 @@ export default function TrainsPanel() {
   }
   const hide = (t: Train) => update(t, { status: "removed" }, `Train ${t.train_no} is hidden from the board and won't be checked again today.`);
   const checkNow = (t: Train) =>
-    update(t, { next_check_at: new Date().toISOString() }, `Train ${t.train_no} moves to the front of the queue for the next run (within 15 minutes).`);
+    update(t, { next_check_at: new Date().toISOString() }, `Train ${t.train_no} is checked in the next update (within 15 minutes).`);
 
   const live = trains.filter(t => LIVE.includes(t.status));
   const done = trains.filter(t => !LIVE.includes(t.status));
@@ -73,8 +73,8 @@ export default function TrainsPanel() {
         <div>
           <h2 id="auto-h">Trains are added automatically</h2>
           <p className="lede">
-            Every reserved train departing New Delhi in the next 4 hours, on its running day, is added on its own.
-            Each is checked on IRCTC soon after it is added, soonest departure first, and rechecked when time allows.
+            Every reserved train departing New Delhi in the next 4 hours is added on its own from the NDLS live board.
+            Seats are fetched once its chart is prepared, soonest departure first, and rechecked when the request budget allows.
             It appears on the public board once current-booking seats are found, and leaves at departure.
           </p>
         </div>
