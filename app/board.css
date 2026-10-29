@@ -108,3 +108,8 @@
   .b-row { grid-template-columns: 1fr; }
   .b-train { border-right: 0; border-bottom: 1px solid var(--rule); }
 }
+
+.b-onboard { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 4px 18px; align-items: center; padding: 7px 14px; background: var(--sig-stop); color: #fff; font-weight: 600; font-size: .92rem; letter-spacing: .01em; border-top: 1px solid rgba(255,255,255,.18); animation: b-onpulse 2.4s ease-in-out infinite; }
+.b-onboard::before { content: "!"; display: inline-grid; place-items: center; width: 18px; height: 18px; border-radius: 50%; background: #fff; color: var(--sig-stop); font-weight: 800; font-size: .8rem; }
+@keyframes b-onpulse { 50% { background: #c62e2e; } }
+@media (prefers-reduced-motion: reduce) { .b-onboard { animation: none; } }

@@ -278,6 +278,12 @@ export default function Board() {
                       <span className="b-dname">Current booking opens after the reservation chart is prepared</span>
                     </div></div></div>
                   ) : <StopStrip train={t} reduce={reduce} />}
+                  {now && new Date(t.dep_at).getTime() - now.getTime() <= 30 * 60000 && (
+                    <div className="b-onboard" role="note">
+                      <span lang="hi">प्रस्थान में 30 मिनट से कम समय · टिकट ट्रेन में ऑन-बोर्ड स्टाफ (टीटीई) से बनवाएं</span>
+                      <span>Less than 30 min to departure · Ticket can be booked by on-board staff (TTE)</span>
+                    </div>
+                  )}
                 </article>
               ))}
           </div>
