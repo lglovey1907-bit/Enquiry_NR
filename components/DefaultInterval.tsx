@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { INTERVALS, intervalLabel } from "@/lib/intervals";
 
-/** Admin-only: the interval new trains start with. Staff can still change it per train. */
+/** Station setting: how often each train on the board is rechecked. Any approved staff member can change it. */
 export default function DefaultInterval() {
   const [value, setValue] = useState<number | null>(null);
   const [saved, setSaved] = useState<number | null>(null);
@@ -24,13 +24,13 @@ export default function DefaultInterval() {
     setBusy(false);
     if (error) { setMsg({ kind: "err", text: error.message }); return; }
     setSaved(value);
-    setMsg({ kind: "ok", text: `Trains will be rechecked at most every ${intervalLabel(value)}. Applies to trains added from now on.` });
+    setMsg({ kind: "ok", text: `Trains will be rechecked at most every ${intervalLabel(value)}. Applies to every train on the board from the next check.` });
   }
 
   return (
     <section className="panel" aria-labelledby="def-h">
       <div>
-        <h2 id="def-h">Recheck interval</h2>
+        <h2 id="def-h">Seat-check interval</h2>
         <p className="lede">After a train is checked, it waits at least this long before being checked again. A shorter time means fresher figures for some trains but slower first checks for others when the board is busy.</p>
       </div>
       <form onSubmit={save} className="setting">

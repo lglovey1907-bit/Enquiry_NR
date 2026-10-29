@@ -124,7 +124,7 @@ export default function TrainsPanel() {
                               : "Showing on board"}
                           </div>
                         )}
-                        {t.status === "error" && t.last_error && <div className="lede" style={{ fontSize: ".8rem" }}>{t.last_error}</div>}
+                        {(t.status === "error" || t.status === "removed") && t.last_error && <div className="lede" style={{ fontSize: ".8rem" }}>{t.last_error}</div>}
                       </td>
                       <td>
                         {avail.length === 0 ? <span className="lede">–</span> : (
