@@ -139,3 +139,11 @@
 .b-onboard { padding: 4px 14px; font-size: .85rem; }
 .b-pf { font-size: .74rem; color: var(--dim); letter-spacing: .04em; }
 .b-pf b { display: inline-block; min-width: 1.6em; text-align: center; background: var(--enamel); color: var(--graphite); border-radius: 3px; padding: 0 4px; font-family: var(--f-head); font-size: .95rem; }
+
+/* Hindi first */
+.b-hi-top { margin-top: .2em; }
+.b-dhi { display: block; font-size: .95rem; font-weight: 600; color: var(--enamel); margin-top: 3px; line-height: 1.15; white-space: nowrap; letter-spacing: 0; }
+.b-dhi + .b-dname { margin-top: 0; }
+.b-run .hi { display: block; }
+.b-empty b[lang="hi"] { margin-bottom: 2px; }
+.b-train { min-width: 0; overflow: hidden; grid-template-columns: minmax(0, 1fr); }

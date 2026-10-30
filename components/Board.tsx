@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 
-type Stop = { code: string; name: string; seats: Record<string, number> | null };
+type Stop = { code: string; name: string; hi?: string; seats: Record<string, number> | null };
 type Train = {
   train_no: string; journey_date: string; train_name: string | null; dep_at: string;
   checked_at: string; next_check_at: string; chart_ready: boolean | null; stops: Stop[]; refresh_minutes: number;
@@ -14,10 +14,11 @@ type Train = {
 const IST = "Asia/Kolkata";
 const POLL_MS = 60_000;
 const NOTICES = [
-  "Current booking tickets are available at the PRS counter and on IRCTC until charting closes",
   "करंट बुकिंग टिकट पीआरएस काउंटर एवं आईआरसीटीसी पर उपलब्ध हैं",
-  "Please check NTES for actual train running time before boarding",
+  "Current booking tickets are available at the PRS counter and on IRCTC until charting closes",
   "यात्रा से पहले गाड़ी की वास्तविक स्थिति NTES पर देखें",
+  "Please check NTES for actual train running time before boarding",
+  "सीटों की संख्या नियमित अंतराल पर अपडेट होती है और बुकिंग के समय बदल सकती है",
   "Seat figures are refreshed at regular intervals and may change at the time of booking",
 ];
 
@@ -65,7 +66,11 @@ function StopCells({ stops }: { stops: Stop[] }) {
     <>
       {stops.map(s => (
         <div className="b-stop" key={s.code}>
-          <div className="b-shead"><span className="b-dcode">{s.code}</span><span className="b-dname">{s.name}</span></div>
+          <div className="b-shead">
+            <span className="b-dcode">{s.code}</span>
+            {s.hi && <span className="b-dhi" lang="hi">{s.hi}</span>}
+            <span className="b-dname">{s.name}</span>
+          </div>
           <div className="b-cell">
             {Object.entries(s.seats ?? {}).map(([c, n]) => (
               <div className="b-cls" key={c} aria-label={`${c} ${n === 0 ? "nil" : `${n} seats`}`}>
@@ -123,12 +128,13 @@ function Running({ t }: { t: Train }) {
   if (t.delay_min >= LATE_MIN) {
     return (
       <div className={`b-run late${t.delay_min >= 60 ? " big" : ""}`}>
-        <span lang="hi">देरी से</span> Running late {leftText(t.delay_min * 60000)}
-        <small>Exp. dep <b>{hhmm(depOf(t))}</b>{t.running_note ? ` · ${t.running_note}` : ""}</small>
+        <span className="hi" lang="hi">{leftText(t.delay_min * 60000).replace("h", " घं").replace("m", " मि")} देरी से</span>
+        <span>Running late {leftText(t.delay_min * 60000)}</span>
+        <small><span lang="hi">अपेक्षित प्रस्थान</span> · Exp. dep <b>{hhmm(depOf(t))}</b>{t.running_note ? ` · ${t.running_note}` : ""}</small>
       </div>
     );
   }
-  return <div className="b-run ok"><span lang="hi">समय पर</span> On time</div>;
+  return <div className="b-run ok"><span lang="hi">समय पर</span> · On time</div>;
 }
 
 function Meta({ t, now }: { t: Train; now: Date }) {
@@ -136,9 +142,9 @@ function Meta({ t, now }: { t: Train; now: Date }) {
   return (
     <div className="b-meta">
       {toDep <= 15 * 60000
-        ? <span className="leaving">Departing in {leftText(toDep)}</span>
-        : <span>Departs in <b>{leftText(toDep)}</b></span>}
-      <span>Seats at <b>{hhmm(new Date(t.checked_at))}</b>{nx <= now && nx < dep ? <em className="due"> · updating</em> : null}</span>
+        ? <span className="leaving"><span lang="hi">प्रस्थान में</span> / Departing in {leftText(toDep)}</span>
+        : <span><span lang="hi">प्रस्थान में</span> / Departs in <b>{leftText(toDep)}</b></span>}
+      <span><span lang="hi">सीटें</span> / Seats at <b>{hhmm(new Date(t.checked_at))}</b>{nx <= now && nx < dep ? <em className="due"> · updating</em> : null}</span>
     </div>
   );
 }
@@ -152,6 +158,12 @@ export default function Board() {
   const [leaving, setLeaving] = useState<Set<string>>(new Set());
   const listRef = useRef<HTMLDivElement>(null);
   const seen = useRef<Map<string, string>>(new Map());
+  const [hiNames, setHiNames] = useState<Record<string, string>>({});
+  useEffect(() => {
+    createClient().from("station_hi").select("code,name_hi").then(({ data }) => {
+      if (data) setHiNames(Object.fromEntries(data.map(r => [r.code as string, r.name_hi as string])));
+    });
+  }, []);
 
   const load = useCallback(async () => {
     const { data, error } = await createClient()
@@ -185,10 +197,10 @@ export default function Board() {
     const t0 = (now ?? new Date()).getTime();
     return trains
       .filter(t => { const d = depOf(t).getTime(); return d > t0 && new Date(t.dep_at).getTime() <= t0 + WINDOW_MS && t.chart_ready !== false; })
-      .map(t => ({ ...t, stops: availableOnly(t.stops) }))
+      .map(t => ({ ...t, stops: availableOnly(t.stops).map(s => ({ ...s, hi: hiNames[s.code] })) }))
       .filter(t => t.stops.length > 0)
       .sort((a, b) => depOf(a).getTime() - depOf(b).getTime());
-  }, [trains, now]);
+  }, [trains, now, hiNames]);
   const [shown, setShown] = useState<Train[]>([]);
   useEffect(() => {
     const liveKeys = new Set(live.map(keyOf));
@@ -275,13 +287,13 @@ export default function Board() {
         <div className="b-band-in">
           <div>
             <div className="b-zone">Northern Railway · Delhi Division</div>
+            <div className="b-hi b-hi-top" lang="hi">करंट बुकिंग में उपलब्ध सीटें</div>
             <h1 className="b-h1">Current Booking Availability</h1>
-            <div className="b-hi">करंट बुकिंग में उपलब्ध सीटें</div>
-            <div className="b-plate"><span className="c">NDLS</span><span className="n">NEW DELHI · नई दिल्ली</span></div>
+            <div className="b-plate"><span className="c">NDLS</span><span className="n"><span lang="hi">नई दिल्ली</span> · NEW DELHI</span></div>
           </div>
           <div className="b-clockbox">
             <Link href="/login" className="b-staff">Staff login</Link>
-            <span className="b-live"><i className="b-lamp" />LIVE BOARD</span>
+            <span className="b-live"><i className="b-lamp" /><span lang="hi">लाइव बोर्ड</span> · LIVE BOARD</span>
             <div className="b-clock" aria-label="Time now">{clock[0]}<span className="colon">:</span>{clock[1]}</div>
             <div className="b-date">{today}</div>
           </div>
@@ -311,11 +323,11 @@ export default function Board() {
       <main className="b-main b-gut">
         <div className="b-main-in">
           <div className="b-info">
-            <span>Departing in next 4 hours with seats <b>{loaded ? shown.length : "–"}</b></span>
-            <span>Quota <b>General · Current Booking</b></span>
+            <span><span lang="hi">अगले 4 घंटे में सीटों वाली गाड़ियां</span> / Departing in next 4 hours with seats <b>{loaded ? shown.length : "–"}</b></span>
+            <span><span lang="hi">कोटा</span> / Quota <b><span lang="hi">सामान्य · करंट बुकिंग</span> / General · Current Booking</b></span>
             {pageCount > 1 && (
               <span className="b-pager" aria-live="polite">
-                Page <b>{page + 1}</b> of <b>{pageCount}</b>
+                <span lang="hi">पृष्ठ</span> / Page <b>{page + 1}</b> / <b>{pageCount}</b>
                 <span className="b-dots" aria-hidden="true">{Array.from({ length: pageCount }, (_, i) => <i key={i} className={i === page ? "on" : ""} />)}</span>
                 <span className="b-pbar" aria-hidden="true"><i key={`${page}-${pageCount}`} style={{ animationDuration: `${PAGE_MS}ms` }} /></span>
               </span>
@@ -323,21 +335,21 @@ export default function Board() {
           </div>
 
           <div className="b-list" key={`frame-${page}`} ref={listRef} aria-label="Current booking seats from New Delhi by train, destination and class">
-            {!loaded ? <div className="b-empty">Loading trains…</div>
-              : failed && shown.length === 0 ? <div className="b-empty"><b>Board data unavailable</b>Check the internet connection. The board retries every minute.</div>
-              : shown.length === 0 ? <div className="b-empty"><b>No current-booking seats in the next 4 hours</b>Trains departing New Delhi in the next 4 hours appear here once their reservation chart is prepared and current-booking seats are available. Each train leaves the board at its departure time.</div>
+            {!loaded ? <div className="b-empty"><span lang="hi">गाड़ियां लोड हो रही हैं…</span><br />Loading trains…</div>
+              : failed && shown.length === 0 ? <div className="b-empty"><b lang="hi">बोर्ड की जानकारी उपलब्ध नहीं</b><b>Board data unavailable</b>Check the internet connection. The board retries every minute.</div>
+              : shown.length === 0 ? <div className="b-empty"><b lang="hi">अगले 4 घंटे में करंट बुकिंग सीटें उपलब्ध नहीं</b><b>No current-booking seats in the next 4 hours</b>Trains departing New Delhi in the next 4 hours appear here once their reservation chart is prepared and current-booking seats are available. Each train leaves the board at its departure time.</div>
               : frame.map((t, i) => (
                 <article key={keyOf(t)} data-row={keyOf(t)} className={`b-row${leaving.has(keyOf(t)) ? " out" : ""}`} style={{ animationDelay: `${i * 0.08}s` }}>
                   <div className="b-train">
                     <div className="b-tline"><span className="b-tno">{t.train_no}</span><span className="b-tdep">Dep <b className={t.delay_min != null && t.delay_min >= LATE_MIN ? "struck" : ""}>{hhmm(new Date(t.dep_at))}</b></span></div>
                     <div className="b-tname">{t.train_name}</div>
-                    {t.platform && <div className="b-pf">PF <b>{t.platform}</b> <span lang="hi">प्लेटफॉर्म</span></div>}
+                    {t.platform && <div className="b-pf"><span lang="hi">प्लेटफॉर्म</span> / PF <b>{t.platform}</b></div>}
                     <Running t={t} />
                     {now && <Meta t={t} now={now} />}
                   </div>
                   {t.chart_ready === false ? (
                     <div className="b-stops"><div className="b-stop await"><div className="b-shead">
-                      <span className="b-dcode">CHART AWAITED</span>
+                      <span className="b-dcode"><span lang="hi">चार्ट प्रतीक्षित</span> · CHART AWAITED</span>
                       <span className="b-dname">Current booking opens after the reservation chart is prepared</span>
                     </div></div></div>
                   ) : <StopStrip train={t} reduce={reduce} />}
@@ -352,9 +364,9 @@ export default function Board() {
           </div>
 
           <div className="b-legend">
-            <span className="b-sig b-go"><i style={{ background: "var(--sig-go)" }} />Seats available (more than 10)</span>
-            <span className="b-sig b-caution"><i style={{ background: "var(--sig-caution)" }} />Few seats left (1–10)</span>
-            <span className="b-sig"><i style={{ background: "var(--dim)", boxShadow: "none" }} />Only destinations and classes with seats are shown</span>
+            <span className="b-sig b-go"><i style={{ background: "var(--sig-go)" }} /><span lang="hi">सीटें उपलब्ध (10 से अधिक)</span> / Seats available (more than 10)</span>
+            <span className="b-sig b-caution"><i style={{ background: "var(--sig-caution)" }} /><span lang="hi">कुछ ही सीटें (1–10)</span> / Few seats left (1–10)</span>
+            <span className="b-sig"><i style={{ background: "var(--dim)", boxShadow: "none" }} /><span lang="hi">केवल सीटों वाले गंतव्य व श्रेणियां दिखाई गई हैं</span> / Only destinations and classes with seats are shown</span>
           </div>
         </div>
       </main>
