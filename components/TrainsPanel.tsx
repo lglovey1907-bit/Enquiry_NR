@@ -8,7 +8,7 @@ type Train = {
   id: number; train_no: string; journey_date: string; train_name: string | null; dep_at: string | null;
   added_at: string; added_by: string | null; status: "queued" | "active" | "departed" | "removed" | "error";
   checked_at: string | null; next_check_at: string; stops: Stop[]; last_error: string | null; refresh_minutes: number;
-  chart_ready: boolean | null; expected_dep_at: string | null; delay_min: number | null; platform: string | null;
+  chart_ready: boolean | null; expected_dep_at: string | null; delay_min: number | null; platform: string | null; platform_override: string | null;
 };
 const LIVE = ["queued", "active", "error"];
 const IST = "Asia/Kolkata";
@@ -33,6 +33,7 @@ export default function TrainsPanel() {
   const [ok, setOk] = useState("");
   const [showDone, setShowDone] = useState(false);
   const [rowBusy, setRowBusy] = useState<number | null>(null);
+  const [pfEdit, setPfEdit] = useState<{ id: number; value: string } | null>(null);
 
   const load = useCallback(async () => {
     const since = new Date(Date.now() - 12 * 3600e3).toISOString();
@@ -56,6 +57,13 @@ export default function TrainsPanel() {
     if (error) { setError(error.message); return; }
     setOk(done);
     load();
+  }
+  async function savePlatform(t: Train, value: string) {
+    const v = value.trim().toUpperCase();
+    if (v && !/^[0-9A-Z]{1,4}$/.test(v)) { setError("Platform must be 1–4 letters or digits, e.g. 7 or 12A."); return; }
+    await update(t, { platform_override: v || null },
+      v ? `Train ${t.train_no} now shows platform ${v} on the board.` : `Train ${t.train_no} shows the platform from RailRadar again.`);
+    setPfEdit(null);
   }
   const hide = (t: Train) => update(t, { status: "removed" }, `Train ${t.train_no} is hidden from the board and won't be checked again today.`);
   const checkNow = (t: Train) =>
@@ -115,7 +123,24 @@ export default function TrainsPanel() {
                       <td><span className="tno">{t.train_no}</span><br /><span className="lede">{t.train_name ?? ""}</span></td>
                       <td className="num">{hhmm(t.dep_at)}
                         {(t.delay_min ?? 0) >= 5 && <><br /><span style={{ color: "var(--warn, #b45309)", fontWeight: 600 }}>Late {t.delay_min} min · exp {hhmm(t.expected_dep_at)}</span></>}
-                        <br /><span className="lede">{isLive ? left(t.expected_dep_at ?? t.dep_at) : ""}{t.platform ? ` · PF ${t.platform}` : ""}</span></td>
+                        <br /><span className="lede">{isLive ? left(t.expected_dep_at ?? t.dep_at) : ""}</span>
+                        <div className="pf-cell">
+                          {pfEdit?.id === t.id ? (
+                            <form onSubmit={e => { e.preventDefault(); savePlatform(t, pfEdit.value); }} className="pf-form">
+                              <label className="sr" htmlFor={`pf-${t.id}`}>Platform for {t.train_no}</label>
+                              <input id={`pf-${t.id}`} value={pfEdit.value} maxLength={4} autoFocus inputMode="text"
+                                onChange={e => setPfEdit({ id: t.id, value: e.target.value })} style={{ width: "4.5em" }} />
+                              <button className="btn sm" type="submit" disabled={rowBusy === t.id}>Save</button>
+                              <button className="btn ghost sm" type="button" onClick={() => setPfEdit(null)}>Cancel</button>
+                            </form>
+                          ) : (
+                            <>
+                              <span>PF <b>{t.platform_override ?? t.platform ?? "–"}</b>{t.platform_override ? <span className="lede" title={`RailRadar: ${t.platform ?? "none"}`}> (set by staff)</span> : null}</span>
+                              {isLive && <button className="btn ghost sm" type="button" onClick={() => setPfEdit({ id: t.id, value: t.platform_override ?? t.platform ?? "" })}>Change</button>}
+                              {isLive && t.platform_override && <button className="btn ghost sm" type="button" disabled={rowBusy === t.id} onClick={() => savePlatform(t, "")}>Reset</button>}
+                            </>
+                          )}
+                        </div></td>
                       <td>
                         <span className={`pill ${t.status}`}>{STATUS_LABEL[t.status]}</span>
                         {isLive && (

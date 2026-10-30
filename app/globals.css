@@ -120,3 +120,7 @@ select.sm { width: auto; padding: 5px 8px; font-size: .85rem; }
 .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 
 @media (prefers-reduced-motion: no-preference) { .btn, .nav a, .tabs button { transition: background .15s; } }
+
+/* Platform editor on the staff train list */
+.pf-cell { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 4px; font-size: .85rem; }
+.pf-form { display: flex; gap: 6px; align-items: center; }

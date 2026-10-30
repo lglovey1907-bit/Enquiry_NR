@@ -8,7 +8,7 @@ type Stop = { code: string; name: string; hi?: string; seats: Record<string, num
 type Train = {
   train_no: string; journey_date: string; train_name: string | null; dep_at: string;
   checked_at: string; next_check_at: string; chart_ready: boolean | null; stops: Stop[]; refresh_minutes: number;
-  expected_dep_at: string | null; delay_min: number | null; running_note: string | null; running_checked_at: string | null; platform: string | null;
+  expected_dep_at: string | null; delay_min: number | null; running_note: string | null; running_checked_at: string | null; platform: string | null; platform_override: string | null;
 };
 
 const IST = "Asia/Kolkata";
@@ -25,8 +25,9 @@ const NOTICES = [
 const hhmm = (d: Date) => new Intl.DateTimeFormat("en-IN", { hour: "2-digit", minute: "2-digit", hour12: false, timeZone: IST }).format(d);
 const leftText = (ms: number) => { const m = Math.max(0, Math.round(ms / 60000)), h = Math.floor(m / 60); return h ? `${h}h ${m % 60}m` : `${m}m`; };
 const WINDOW_MS = 4 * 3600_000;   // board shows trains departing within the next 4 hours
-const PAGE_SIZE = 6;              // trains per frame
+const WIDE_QUERY = "(min-width: 1200px)"; // two trains side by side, 6 per page; narrower screens: one column, 4 per page
 const PAGE_MS = 20_000;           // each frame stays 20 seconds, then the next one; loops
+const ONBOARD_MS = 15 * 60_000;   // red "book with the TTE" strip from this close to departure
 const LATE_MIN = 5;               // delay shown as "running late" from this many minutes
 /** Expected departure if the train is running late, else scheduled. */
 const depOf = (t: Train) => new Date(t.expected_dep_at ?? t.dep_at);
@@ -168,7 +169,7 @@ export default function Board() {
   const load = useCallback(async () => {
     const { data, error } = await createClient()
       .from("trains")
-      .select("train_no,journey_date,train_name,dep_at,checked_at,next_check_at,chart_ready,stops,refresh_minutes,expected_dep_at,delay_min,running_note,running_checked_at,platform")
+      .select("train_no,journey_date,train_name,dep_at,checked_at,next_check_at,chart_ready,stops,refresh_minutes,expected_dep_at,delay_min,running_note,running_checked_at,platform,platform_override")
       .in("status", ["active", "error"])
       .not("checked_at", "is", null)
       .or(`dep_at.gt.${new Date().toISOString()},expected_dep_at.gt.${new Date().toISOString()}`)
@@ -215,6 +216,14 @@ export default function Board() {
   }, [live, reduce]);
 
   // Frames of 6 trains; each stays 30 s, then the next, looping.
+  const [wide, setWide] = useState(true);
+  useEffect(() => {
+    const mq = window.matchMedia(WIDE_QUERY);
+    const on = () => setWide(mq.matches);
+    on(); mq.addEventListener("change", on);
+    return () => mq.removeEventListener("change", on);
+  }, []);
+  const PAGE_SIZE = wide ? 6 : 4;
   const pageCount = Math.max(1, Math.ceil(shown.length / PAGE_SIZE));
   const [page, setPage] = useState(0);
   useEffect(() => { if (page >= pageCount) setPage(0); }, [page, pageCount]);
@@ -343,7 +352,7 @@ export default function Board() {
                   <div className="b-train">
                     <div className="b-tline"><span className="b-tno">{t.train_no}</span><span className="b-tdep">Dep <b className={t.delay_min != null && t.delay_min >= LATE_MIN ? "struck" : ""}>{hhmm(new Date(t.dep_at))}</b></span></div>
                     <div className="b-tname">{t.train_name}</div>
-                    {t.platform && <div className="b-pf"><span lang="hi">प्लेटफॉर्म</span> / PF <b>{t.platform}</b></div>}
+                    {(t.platform_override ?? t.platform) && <div className="b-pf"><span lang="hi">प्लेटफॉर्म</span> / PF <b>{t.platform_override ?? t.platform}</b></div>}
                     <Running t={t} />
                     {now && <Meta t={t} now={now} />}
                   </div>
@@ -353,10 +362,10 @@ export default function Board() {
                       <span className="b-dname">Current booking opens after the reservation chart is prepared</span>
                     </div></div></div>
                   ) : <StopStrip train={t} reduce={reduce} />}
-                  {now && depOf(t).getTime() - now.getTime() <= 30 * 60000 && (
+                  {now && depOf(t).getTime() - now.getTime() <= ONBOARD_MS && (
                     <div className="b-onboard" role="note">
-                      <span lang="hi">प्रस्थान में 30 मिनट से कम समय · टिकट ट्रेन में ऑन-बोर्ड स्टाफ (टीटीई) से बनवाएं</span>
-                      <span>Less than 30 min to departure · Ticket can be booked by on-board staff (TTE)</span>
+                      <span lang="hi">प्रस्थान में 15 मिनट से कम समय · टिकट ट्रेन में ऑन-बोर्ड स्टाफ (टीटीई) से बनवाएं</span>
+                      <span>Less than 15 min to departure · Ticket can be booked by on-board staff (TTE)</span>
                     </div>
                   )}
                 </article>
