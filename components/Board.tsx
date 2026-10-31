@@ -28,7 +28,9 @@ const WINDOW_MS = 4 * 3600_000;   // board shows trains departing within the nex
 const WIDE_QUERY = "(min-width: 1200px)"; // two trains side by side, 6 per page; narrower screens: one column, 4 per page
 const PAGE_MS = 20_000;           // each frame stays 20 seconds, then the next one; loops
 const ONBOARD_MS = 15 * 60_000;   // red "book with the TTE" strip from this close to departure
-const LATE_MIN = 5;               // delay shown as "running late" from this many minutes
+const LATE_MIN = 5;
+// "updating" only while a recheck is genuinely due; a check held back by the daily request budget shows just its time.
+const UPDATING_MS = 10 * 60_000;               // delay shown as "running late" from this many minutes
 /** Expected departure if the train is running late, else scheduled. */
 const depOf = (t: Train) => new Date(t.expected_dep_at ?? t.dep_at);
 /** Keep only destinations with at least one class that has current-booking seats, and only those classes. */
@@ -145,7 +147,7 @@ function Meta({ t, now }: { t: Train; now: Date }) {
       {toDep <= 15 * 60000
         ? <span className="leaving"><span lang="hi">प्रस्थान में</span> / Departing in {leftText(toDep)}</span>
         : <span><span lang="hi">प्रस्थान में</span> / Departs in <b>{leftText(toDep)}</b></span>}
-      <span><span lang="hi">सीटें</span> / Seats at <b>{hhmm(new Date(t.checked_at))}</b>{nx <= now && nx < dep ? <em className="due"> · updating</em> : null}</span>
+      <span><span lang="hi">सीटें</span> / Seats at <b>{hhmm(new Date(t.checked_at))}</b>{nx <= now && now.getTime() - nx.getTime() < UPDATING_MS && nx < dep ? <em className="due"> · updating</em> : null}</span>
     </div>
   );
 }
