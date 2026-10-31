@@ -286,12 +286,25 @@ export default function Board() {
     return () => window.removeEventListener("resize", fit);
   }, [frame, full, loaded, now]);
 
+  // Browser full screen for counter displays (button, or double-click anywhere on the board).
+  const [isFull, setIsFull] = useState(false);
+  useEffect(() => {
+    const on = () => setIsFull(!!document.fullscreenElement);
+    on(); document.addEventListener("fullscreenchange", on);
+    return () => document.removeEventListener("fullscreenchange", on);
+  }, []);
+  const toggleFull = useCallback(() => {
+    if (document.fullscreenElement) document.exitFullscreen?.().catch(() => {});
+    else document.documentElement.requestFullscreen?.().catch(() => {});
+  }, []);
+  const rows = wide ? Math.ceil(PAGE_SIZE / 2) : PAGE_SIZE;
+
   const clock = now ? hhmm(now).split(":") : ["--", "--"];
   const today = now ? now.toLocaleDateString("en-IN", { weekday: "short", day: "2-digit", month: "short", year: "numeric", timeZone: IST }).toUpperCase() : "";
   const notices = NOTICES.map((n, i) => <span key={i}>◆ {n}</span>);
 
   return (
-    <div className="b-root" ref={rootRef}>
+    <div className="b-root" ref={rootRef} onDoubleClick={toggleFull}>
       <section className="b-band b-gut">
         <div className="b-band-in">
           <div>
@@ -301,7 +314,10 @@ export default function Board() {
             <div className="b-plate"><span className="c">NDLS</span><span className="n"><span lang="hi">नई दिल्ली</span> · NEW DELHI</span></div>
           </div>
           <div className="b-clockbox">
-            <Link href="/login" className="b-staff">Staff login</Link>
+            <span className="b-tools">
+              {!isFull && <button type="button" className="b-fs" onClick={toggleFull}>⛶ Full screen</button>}
+              <Link href="/login" className="b-staff">Staff login</Link>
+            </span>
             <span className="b-live"><i className="b-lamp" /><span lang="hi">लाइव बोर्ड</span> · LIVE BOARD</span>
             <div className="b-clock" aria-label="Time now">{clock[0]}<span className="colon">:</span>{clock[1]}</div>
             <div className="b-date">{today}</div>
@@ -343,7 +359,7 @@ export default function Board() {
             )}
           </div>
 
-          <div className="b-list" key={`frame-${page}`} ref={listRef} aria-label="Current booking seats from New Delhi by train, destination and class">
+          <div className={`b-list${loaded && frame.length ? " fill" : ""}`} style={{ ["--rows" as string]: rows }} key={`frame-${page}`} ref={listRef} aria-label="Current booking seats from New Delhi by train, destination and class">
             {!loaded ? <div className="b-empty"><span lang="hi">गाड़ियां लोड हो रही हैं…</span><br />Loading trains…</div>
               : failed && shown.length === 0 ? <div className="b-empty"><b lang="hi">बोर्ड की जानकारी उपलब्ध नहीं</b><b>Board data unavailable</b>Check the internet connection. The board retries every minute.</div>
               : shown.length === 0 ? <div className="b-empty"><b lang="hi">अगले 4 घंटे में करंट बुकिंग सीटें उपलब्ध नहीं</b><b>No current-booking seats in the next 4 hours</b>Trains departing New Delhi in the next 4 hours appear here once their reservation chart is prepared and current-booking seats are available. Each train leaves the board at its departure time.</div>
