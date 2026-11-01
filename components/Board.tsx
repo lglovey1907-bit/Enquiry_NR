@@ -33,9 +33,12 @@ const LATE_MIN = 5;
 const UPDATING_MS = 10 * 60_000;               // delay shown as "running late" from this many minutes
 /** Expected departure if the train is running late, else scheduled. */
 const depOf = (t: Train) => new Date(t.expected_dep_at ?? t.dep_at);
-/** Keep only destinations with at least one class that has current-booking seats, and only those classes. */
+/** Delhi-area stations: never shown as destinations (no current-booking need for such short trips). */
+const LOCAL = new Set(["NZM", "DLI", "DSA", "DEC", "DEE", "DKZ", "DSJ", "ANVT", "SSB", "SBB", "GZB", "FDB", "FDN", "BVH",
+                       "GGN", "OKA", "TKD", "NNO", "ADRS", "NUR", "NDLS"]);
+/** Keep only destinations outside Delhi with at least one class that has current-booking seats, and only those classes. */
 const availableOnly = (stops: Stop[]): Stop[] =>
-  (stops ?? []).flatMap(s => {
+  (stops ?? []).filter(s => !LOCAL.has(s.code)).flatMap(s => {
     const seats = Object.fromEntries(Object.entries(s.seats ?? {}).filter(([, n]) => Number(n) > 0));
     return Object.keys(seats).length ? [{ ...s, seats }] : [];
   });
