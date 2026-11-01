@@ -301,12 +301,29 @@ export default function Board() {
   }, []);
   const rows = wide ? Math.ceil(PAGE_SIZE / 2) : PAGE_SIZE;
 
+  // Train area colours: dark (default) or white. ?theme=light|dark in the address wins, else the screen's last choice.
+  const [theme, setTheme] = useState<"dark" | "light">("dark");
+  useEffect(() => {
+    const q = new URLSearchParams(window.location.search).get("theme");
+    let saved: string | null = null;
+    try { saved = localStorage.getItem("board-theme"); } catch { /* storage unavailable */ }
+    const t = q === "light" || q === "dark" ? q : saved;
+    if (t === "light" || t === "dark") setTheme(t);
+  }, []);
+  const toggleTheme = useCallback(() => {
+    setTheme(t => {
+      const n = t === "dark" ? "light" : "dark";
+      try { localStorage.setItem("board-theme", n); } catch { /* storage unavailable */ }
+      return n;
+    });
+  }, []);
+
   const clock = now ? hhmm(now).split(":") : ["--", "--"];
   const today = now ? now.toLocaleDateString("en-IN", { weekday: "short", day: "2-digit", month: "short", year: "numeric", timeZone: IST }).toUpperCase() : "";
   const notices = NOTICES.map((n, i) => <span key={i}>◆ {n}</span>);
 
   return (
-    <div className="b-root" ref={rootRef} onDoubleClick={toggleFull}>
+    <div className={`b-root${theme === "light" ? " light" : ""}`} ref={rootRef} onDoubleClick={toggleFull}>
       <section className="b-band b-gut">
         <div className="b-band-in">
           <div>
@@ -317,6 +334,9 @@ export default function Board() {
           </div>
           <div className="b-clockbox">
             <span className="b-tools">
+              <button type="button" className="b-fs" onClick={toggleTheme} onDoubleClick={e => e.stopPropagation()} aria-pressed={theme === "light"}>
+                {theme === "dark" ? "☀ White board" : "☾ Dark board"}
+              </button>
               {!isFull && <button type="button" className="b-fs" onClick={toggleFull}>⛶ Full screen</button>}
               <Link href="/login" className="b-staff">Staff login</Link>
             </span>

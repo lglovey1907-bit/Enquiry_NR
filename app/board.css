@@ -188,3 +188,21 @@ html:has(.b-root) { font-size: clamp(16px, calc(0.62vw + 0.95vh), 46px); }
   .b-tdep { flex: none; }
   .b-run small { white-space: normal; }
 }
+
+/* White board: the train area (between the maroon header and the notice strip) in dark text on white.
+   Switched with the header button; remembered per screen; ?theme=light / ?theme=dark in the address also sets it. */
+.b-root.light .b-main {
+  --graphite: #f3f1ec; --slate: #ffffff; --rule: #d6d1c8; --enamel: #16191d; --dim: #4a525e;
+  --flap: #ecebe7; --sig-go: #087a3b; --sig-caution: #b05a00; --sig-stop: #c42323;
+  background: var(--graphite); color: var(--enamel); color-scheme: light;
+}
+.b-root.light .b-row { box-shadow: 0 1px 2px rgba(22,25,29,.08); }
+.b-root.light .b-train, .b-root.light .b-loopmark { background: #f8f6f2; }
+.b-root.light .b-tname { color: var(--maroon); }
+.b-root.light .b-flap { box-shadow: inset 0 -1px 0 #cdc7bd, inset 0 0 0 1px #dedad3; }
+.b-root.light .b-flap::after { opacity: .12; }
+.b-root.light .b-ctag { color: #39414c; }
+.b-root.light .b-dname { color: #4a525e; }
+.b-root.light .b-pf b { background: var(--maroon); color: #fff; }
+.b-root.light .b-run small b { color: var(--enamel); }
+.b-root.light .b-pbar i { background: var(--maroon); }
