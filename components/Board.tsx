@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { availableOnly, type Stop } from "@/lib/seats";
 
@@ -47,13 +47,36 @@ function useReducedMotion() {
   return reduce;
 }
 
+/** Changes whenever a row's figures should roll (new seat check or page change); "" = no motion. */
+const RollCtx = createContext("");
+
+/** One split-flap digit. It rolls through a few digits and always comes to rest on `ch`,
+ *  even if the roll is cut short, because React owns the text (no direct DOM writes). */
+function Flap({ ch, cls, idx }: { ch: string; cls: string; idx: number }) {
+  const stamp = useContext(RollCtx);
+  const [shown, setShown] = useState(ch);
+  const [spin, setSpin] = useState(0);
+  useEffect(() => {
+    setShown(ch);
+    if (!stamp || !/^\d$/.test(ch)) return;
+    const steps = 8 + (idx % 7);
+    let s = 0;
+    const iv = window.setInterval(() => {
+      s++;
+      setSpin(x => x + 1);
+      if (s >= steps) { setShown(ch); clearInterval(iv); }
+      else setShown(String((Number(ch) + steps - s) % 10));
+    }, 70);
+    return () => { clearInterval(iv); setShown(ch); };
+  }, [ch, stamp, idx]);
+  return <span key={spin} className={`b-flap ${cls}${spin ? " spin" : ""}`}>{shown}</span>;
+}
+
 function Flaps({ n }: { n: number }) {
   if (n === 0) return <span className="b-flaps"><span className="b-flap wide b-stopc">NIL</span></span>;
   return (
     <span className="b-flaps">
-      {[...String(n).padStart(3, "0")].map((ch, i) => (
-        <span key={i} className={`b-flap ${sig(n)}`} data-final={ch}>{ch}</span>
-      ))}
+      {[...String(n).padStart(3, "0")].map((ch, i) => <Flap key={i} ch={ch} cls={sig(n)} idx={i} />)}
     </span>
   );
 }
@@ -154,7 +177,6 @@ export default function Board() {
   const [failed, setFailed] = useState(false);
   const [leaving, setLeaving] = useState<Set<string>>(new Set());
   const listRef = useRef<HTMLDivElement>(null);
-  const seen = useRef<Map<string, string>>(new Map());
   const [hiNames, setHiNames] = useState<Record<string, string>>({});
   useEffect(() => {
     createClient().from("station_hi").select("code,name_hi").then(({ data }) => {
@@ -229,31 +251,6 @@ export default function Board() {
     return () => clearInterval(id);
   }, [pageCount]);
   const frame = shown.slice(page * PAGE_SIZE, page * PAGE_SIZE + PAGE_SIZE);
-
-  // Split-flap settle: digits roll briefly whenever a train's figures change.
-  useEffect(() => {
-    if (reduce || !listRef.current) return;
-    const timers: number[] = [];
-    frame.forEach(t => {
-      const k = keyOf(t);
-      const stamp = `${t.checked_at}|${page}`;
-      if (seen.current.get(k) === stamp) return;
-      seen.current.set(k, stamp);
-      const row = listRef.current!.querySelector(`[data-row="${CSS.escape(k)}"]`);
-      row?.querySelectorAll<HTMLElement>(".b-flap[data-final]").forEach((el, idx) => {
-        const fin = el.dataset.final!;
-        let s = 0; const steps = 8 + (idx % 7);
-        const iv = window.setInterval(() => {
-          el.classList.remove("spin"); void el.offsetWidth; el.classList.add("spin");
-          el.textContent = s >= steps ? fin : String((Number(fin) + steps - s) % 10);
-          if (s++ >= steps) clearInterval(iv);
-        }, 70);
-        timers.push(iv);
-      });
-    });
-    return () => timers.forEach(clearInterval);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [shown, page, reduce]);
 
   // Fit the whole board (6 trains, legend, ticker) on one screen on counter displays.
   // A full 6-train frame sets the scale; shorter frames keep it so every page looks the same.
@@ -393,7 +390,7 @@ export default function Board() {
                       <span className="b-dcode"><span lang="hi">चार्ट प्रतीक्षित</span> · CHART AWAITED</span>
                       <span className="b-dname">Current booking opens after the reservation chart is prepared</span>
                     </div></div></div>
-                  ) : <StopStrip train={t} reduce={reduce} />}
+                  ) : <RollCtx.Provider value={reduce ? "" : `${t.checked_at}|${page}`}><StopStrip train={t} reduce={reduce} /></RollCtx.Provider>}
                   {now && depOf(t).getTime() - now.getTime() <= ONBOARD_MS && (
                     <div className="b-onboard" role="note">
                       <span lang="hi">प्रस्थान में 15 मिनट से कम समय · टिकट ट्रेन में ऑन-बोर्ड स्टाफ (टीटीई) से बनवाएं</span>
