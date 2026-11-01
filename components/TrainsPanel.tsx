@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
+import { printableTrains, type PdfLayout } from "@/lib/seatPdf";
 
 type Stop = { code: string; name: string; seats: Record<string, number> | null };
 type Train = {
@@ -34,6 +35,8 @@ export default function TrainsPanel() {
   const [showDone, setShowDone] = useState(false);
   const [rowBusy, setRowBusy] = useState<number | null>(null);
   const [pfEdit, setPfEdit] = useState<{ id: number; value: string } | null>(null);
+  const [layout, setLayout] = useState<PdfLayout>("train");
+  const [pdfBusy, setPdfBusy] = useState<"download" | "print" | null>(null);
 
   const load = useCallback(async () => {
     const since = new Date(Date.now() - 12 * 3600e3).toISOString();
@@ -69,6 +72,23 @@ export default function TrainsPanel() {
   const checkNow = (t: Train) =>
     update(t, { next_check_at: new Date().toISOString() }, `Train ${t.train_no} is checked in the next board update.`);
 
+  async function makePdf(action: "download" | "print") {
+    setError(""); setOk("");
+    // Open the print tab now, while the click still counts, so the browser doesn't block it.
+    const win = action === "print" ? window.open("", "_blank") : null;
+    if (win) win.document.write("<p style='font:16px sans-serif;padding:24px'>Preparing seat list…</p>");
+    setPdfBusy(action);
+    try {
+      const { makeSeatPdf } = await import("@/lib/seatPdf");
+      const n = await makeSeatPdf(trains, layout, action, win);
+      setOk(n ? `Seat list with ${n} train${n === 1 ? "" : "s"} ${action === "print" ? "opened for printing" : "downloaded"}.`
+              : "No train has current-booking seats right now; the PDF says so.");
+    } catch (e) {
+      win?.close();
+      setError(`Couldn't make the PDF: ${e instanceof Error ? e.message : String(e)}`);
+    } finally { setPdfBusy(null); }
+  }
+
   const live = trains.filter(t => LIVE.includes(t.status));
   const done = trains.filter(t => !LIVE.includes(t.status));
   const shown = showDone ? done : live;
@@ -90,6 +110,19 @@ export default function TrainsPanel() {
           <span><b className="num" style={{ fontSize: "1.4rem" }}>{loaded ? live.length : "–"}</b> trains in the next 4 hours</span>
           <span><b className="num" style={{ fontSize: "1.4rem" }}>{loaded ? onBoard : "–"}</b> showing on board</span>
           <span><b className="num" style={{ fontSize: "1.4rem" }}>{loaded ? waiting : "–"}</b> waiting for first check</span>
+        </div>
+        <div className="row pdf-bar" style={{ gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+          <b>Seat list PDF</b>
+          <div className="tabs" role="group" aria-label="PDF layout">
+            <button type="button" aria-pressed={layout === "train"} onClick={() => setLayout("train")}>Train-wise</button>
+            <button type="button" aria-pressed={layout === "destination"} onClick={() => setLayout("destination")}>Destination-wise</button>
+          </div>
+          <button className="btn sm" type="button" disabled={!loaded || pdfBusy !== null} onClick={() => makePdf("download")}>
+            {pdfBusy === "download" ? "Preparing…" : "Download PDF"}</button>
+          <button className="btn ghost sm" type="button" disabled={!loaded || pdfBusy !== null} onClick={() => makePdf("print")}>
+            {pdfBusy === "print" ? "Preparing…" : "Print"}</button>
+          <span className="lede" style={{ fontSize: ".82rem" }}>
+            {loaded ? `${printableTrains(trains).length} train(s) with seats, same as the public board` : ""}</span>
         </div>
         {error && <div className="msg err" role="alert">{error}</div>}
         {ok && <div className="msg ok" role="status">{ok}</div>}

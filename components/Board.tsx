@@ -3,8 +3,8 @@
 import Link from "next/link";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
+import { availableOnly, type Stop } from "@/lib/seats";
 
-type Stop = { code: string; name: string; hi?: string; seats: Record<string, number> | null };
 type Train = {
   train_no: string; journey_date: string; train_name: string | null; dep_at: string;
   checked_at: string; next_check_at: string; chart_ready: boolean | null; stops: Stop[]; refresh_minutes: number;
@@ -33,15 +33,6 @@ const LATE_MIN = 5;
 const UPDATING_MS = 10 * 60_000;               // delay shown as "running late" from this many minutes
 /** Expected departure if the train is running late, else scheduled. */
 const depOf = (t: Train) => new Date(t.expected_dep_at ?? t.dep_at);
-/** Delhi-area stations: never shown as destinations (no current-booking need for such short trips). */
-const LOCAL = new Set(["NZM", "DLI", "DSA", "DEC", "DEE", "DKZ", "DSJ", "ANVT", "SSB", "SBB", "GZB", "FDB", "FDN", "BVH",
-                       "GGN", "OKA", "TKD", "NNO", "ADRS", "NUR", "NDLS"]);
-/** Keep only destinations outside Delhi with at least one class that has current-booking seats, and only those classes. */
-const availableOnly = (stops: Stop[]): Stop[] =>
-  (stops ?? []).filter(s => !LOCAL.has(s.code)).flatMap(s => {
-    const seats = Object.fromEntries(Object.entries(s.seats ?? {}).filter(([, n]) => Number(n) > 0));
-    return Object.keys(seats).length ? [{ ...s, seats }] : [];
-  });
 const sig = (n: number) => (n === 0 ? "b-stopc" : n <= 10 ? "b-caution" : "b-go");
 
 function useReducedMotion() {
