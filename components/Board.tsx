@@ -169,7 +169,13 @@ function Meta({ t, now }: { t: Train; now: Date }) {
   );
 }
 
-export default function Board() {
+/** A station other than NDLS. Without it the board is the original New Delhi board, unchanged. */
+export type BoardStation = { code: string; name_en: string; name_hi: string | null; zone_division: string; local_codes: string[] };
+
+export default function Board({ station }: { station?: BoardStation } = {}) {
+  const st = station?.code ?? null;
+  const localSet = useMemo(() => (station ? new Set([...station.local_codes, station.code]) : undefined), [station]);
+  const placeEn = station?.name_en ?? "New Delhi";
   const reduce = useReducedMotion();
   const [now, setNow] = useState<Date | null>(null);
   const [trains, setTrains] = useState<Train[]>([]);
@@ -185,18 +191,20 @@ export default function Board() {
   }, []);
 
   const load = useCallback(async () => {
-    const { data, error } = await createClient()
-      .from("trains")
+    let q = createClient()
+      .from(st ? "st_trains" : "trains")
       .select("train_no,journey_date,train_name,dep_at,checked_at,next_check_at,chart_ready,stops,refresh_minutes,expected_dep_at,delay_min,running_note,running_checked_at,platform,platform_override")
       .in("status", ["active", "error"])
       .not("checked_at", "is", null)
       .or(`dep_at.gt.${new Date().toISOString()},expected_dep_at.gt.${new Date().toISOString()}`)
       .order("dep_at");
+    if (st) q = q.eq("station", st);
+    const { data, error } = await q;
     if (error) { setFailed(true); setLoaded(true); return; }
     setFailed(false);
     setTrains((data ?? []) as Train[]);
     setLoaded(true);
-  }, []);
+  }, [st]);
 
   useEffect(() => {
     setNow(new Date());
@@ -216,10 +224,10 @@ export default function Board() {
     const t0 = (now ?? new Date()).getTime();
     return trains
       .filter(t => { const d = depOf(t).getTime(); return d > t0 && new Date(t.dep_at).getTime() <= t0 + WINDOW_MS && t.chart_ready !== false; })
-      .map(t => ({ ...t, stops: availableOnly(t.stops).map(s => ({ ...s, hi: hiNames[s.code] })) }))
+      .map(t => ({ ...t, stops: availableOnly(t.stops, localSet).map(s => ({ ...s, hi: hiNames[s.code] })) }))
       .filter(t => t.stops.length > 0)
       .sort((a, b) => depOf(a).getTime() - depOf(b).getTime());
-  }, [trains, now, hiNames]);
+  }, [trains, now, hiNames, localSet]);
   const [shown, setShown] = useState<Train[]>([]);
   useEffect(() => {
     const liveKeys = new Set(live.map(keyOf));
@@ -318,10 +326,12 @@ export default function Board() {
       <section className="b-band b-gut">
         <div className="b-band-in">
           <div>
-            <div className="b-zone">Northern Railway · Delhi Division</div>
+            <div className="b-zone">{station?.zone_division ?? "Northern Railway · Delhi Division"}</div>
             <div className="b-hi b-hi-top" lang="hi">करंट बुकिंग में उपलब्ध सीटें</div>
             <h1 className="b-h1">Current Booking Availability</h1>
-            <div className="b-plate"><span className="c">NDLS</span><span className="n"><span lang="hi">नई दिल्ली</span> · NEW DELHI</span></div>
+            {station
+              ? <div className="b-plate"><span className="c">{station.code}</span><span className="n">{station.name_hi && <><span lang="hi">{station.name_hi}</span> · </>}{station.name_en.toUpperCase()}</span></div>
+              : <div className="b-plate"><span className="c">NDLS</span><span className="n"><span lang="hi">नई दिल्ली</span> · NEW DELHI</span></div>}
           </div>
           <div className="b-clockbox">
             <span className="b-tools">
@@ -372,10 +382,10 @@ export default function Board() {
             )}
           </div>
 
-          <div className={`b-list${loaded && frame.length ? " fill" : ""}`} style={{ ["--rows" as string]: rows }} key={`frame-${page}`} ref={listRef} aria-label="Current booking seats from New Delhi by train, destination and class">
+          <div className={`b-list${loaded && frame.length ? " fill" : ""}`} style={{ ["--rows" as string]: rows }} key={`frame-${page}`} ref={listRef} aria-label={`Current booking seats from ${placeEn} by train, destination and class`}>
             {!loaded ? <div className="b-empty"><span lang="hi">गाड़ियां लोड हो रही हैं…</span><br />Loading trains…</div>
               : failed && shown.length === 0 ? <div className="b-empty"><b lang="hi">बोर्ड की जानकारी उपलब्ध नहीं</b><b>Board data unavailable</b>Check the internet connection. The board retries every minute.</div>
-              : shown.length === 0 ? <div className="b-empty"><b lang="hi">अगले 4 घंटे में करंट बुकिंग सीटें उपलब्ध नहीं</b><b>No current-booking seats in the next 4 hours</b>Trains departing New Delhi in the next 4 hours appear here once their reservation chart is prepared and current-booking seats are available. Each train leaves the board at its departure time.</div>
+              : shown.length === 0 ? <div className="b-empty"><b lang="hi">अगले 4 घंटे में करंट बुकिंग सीटें उपलब्ध नहीं</b><b>No current-booking seats in the next 4 hours</b>Trains departing {placeEn} in the next 4 hours appear here once their reservation chart is prepared and current-booking seats are available. Each train leaves the board at its departure time.</div>
               : frame.map((t, i) => (
                 <article key={keyOf(t)} data-row={keyOf(t)} className={`b-row${leaving.has(keyOf(t)) ? " out" : ""}`} style={{ animationDelay: `${i * 0.08}s` }}>
                   <div className="b-train">

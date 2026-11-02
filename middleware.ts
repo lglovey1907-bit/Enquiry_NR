@@ -24,7 +24,11 @@ export async function middleware(request: NextRequest) {
 
   const { data: { user } } = await supabase.auth.getUser();
   const path = request.nextUrl.pathname;
-  const isPublic = path === "/" || path === "/login" || path === "/register";
+  // Station boards (/ANVT, /anvt) are public too; other short paths like /admin or /staff are app pages.
+  const APP_PAGES = new Set(["admin", "auth", "dashboard", "login", "pending", "register", "staff", "stations"]);
+  const seg = path.slice(1);
+  const isStationBoard = /^[A-Za-z]{2,5}$/.test(seg) && !APP_PAGES.has(seg.toLowerCase());
+  const isPublic = path === "/" || path === "/login" || path === "/register" || isStationBoard;
 
   if (!user && !isPublic) {
     const url = request.nextUrl.clone();

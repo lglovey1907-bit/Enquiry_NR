@@ -5,8 +5,8 @@ export const LOCAL = new Set(["NZM", "DLI", "DSA", "DEC", "DEE", "DKZ", "DSJ", "
                               "GGN", "OKA", "TKD", "NNO", "ADRS", "NUR", "NDLS"]);
 
 /** Keep only destinations outside Delhi with at least one class that has current-booking seats, and only those classes. */
-export const availableOnly = <S extends Stop>(stops: S[]): S[] =>
-  (stops ?? []).filter(s => !LOCAL.has(s.code)).flatMap(s => {
+export const availableOnly = <S extends Stop>(stops: S[], local: Set<string> = LOCAL): S[] =>
+  (stops ?? []).filter(s => !local.has(s.code)).flatMap(s => {
     const seats = Object.fromEntries(Object.entries(s.seats ?? {}).filter(([, n]) => Number(n) > 0));
     return Object.keys(seats).length ? [{ ...s, seats }] : [];
   });

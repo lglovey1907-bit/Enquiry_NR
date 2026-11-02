@@ -1,7 +1,7 @@
 import Link from "next/link";
 import type { Profile } from "@/lib/auth";
 
-export default function Header({ profile, active }: { profile: Profile | null; active?: "dashboard" | "admin" }) {
+export default function Header({ profile, active }: { profile: Profile | null; active?: "dashboard" | "admin" | "stations" }) {
   return (
     <header className="band">
       <div className="band-in">
@@ -17,6 +17,9 @@ export default function Header({ profile, active }: { profile: Profile | null; a
           )}
           {profile?.status === "approved" && profile.role === "admin" && (
             <Link href="/admin" className={active === "admin" ? "active" : ""}>Staff approvals</Link>
+          )}
+          {profile?.status === "approved" && profile.role === "admin" && (
+            <Link href="/stations" className={active === "stations" ? "active" : ""}>Stations</Link>
           )}
           <form action="/auth/signout" method="post" style={{ display: "contents" }}>
             <button type="submit">Sign out</button>
