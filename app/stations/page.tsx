@@ -13,7 +13,7 @@ export default async function StationsPage() {
   if (!isAdmin && manages.length === 0) redirect("/dashboard");
   return (
     <>
-      <Header profile={profile} active="stations" />
+      <Header profile={profile} active="stations" stationsNav />
       <main className="wrap">
         <div>
           <h1>Station boards</h1>

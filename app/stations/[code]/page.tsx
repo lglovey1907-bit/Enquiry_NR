@@ -18,7 +18,7 @@ export default async function StationPage({ params }: { params: { code: string }
   }
   return (
     <>
-      <Header profile={profile} active="stations" />
+      <Header profile={profile} active="stations" board={code} stationsNav />
       <main className="wrap">
         <div>
           <h1>{st.code} · {st.name_en}</h1>
